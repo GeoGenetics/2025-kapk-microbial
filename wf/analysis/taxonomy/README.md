@@ -1,4 +1,4 @@
-# Ancient DNA Analysis Pipeline
+# Ancient Metagenomics Analysis Workflow
 
 A Snakemake workflow for analyzing ancient DNA (aDNA) sequences with a focus on taxonomic profiling and damage pattern analysis.
 
@@ -185,15 +185,11 @@ Common issues and solutions:
    - Check log files in the logs/ directory
    - Verify conda environment activation
 
-## License
-
-[Specify License]
-
 ## Citation
 
-If you use this pipeline, please cite:
-[Add citation information]
+If you use this workflow, please cite:
+https://doi.org/10.1101/2023.06.10.544454
 
 ## Contact
 
-[Add contact information]
+antonio@metagenomics.eu
