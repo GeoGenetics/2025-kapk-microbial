@@ -1,0 +1,17 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - python==3.8
+  - htslib
+  - gsl
+  - eigen
+  - numpy
+  - pandas
+  - typer
+  - click-help-colors
+  - pip
+  - pip:
+      - metaDMG[fit]>=0.17.2

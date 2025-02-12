@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - python=3.6
+  - anvio=7
+  - diamond=0.9.14
+  - seqkit
+  - django=3.2.10
+  - pip
+  - pip:
+      - https://github.com/merenlab/anvio/releases/download/v7.1/anvio-7.1.tar.gz
+      - scikit-learn==0.23.2

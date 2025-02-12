@@ -1,0 +1,397 @@
+import glob
+import pandas as pd
+from snakemake.utils import validate, min_version, max_version
+
+
+def get_md5sum(x):
+    import hashlib
+
+    return hashlib.md5(x.encode("utf-8")).hexdigest()[:10]
+
+
+"""
+Author: A. Fernandez-Guerra
+Affiliation: Lundbeck Foundation GeoGenetics Centre
+Aim: Assembly and initial analysis of ventilation samples
+Run: snakemake   -s Snakefile
+"""
+#
+##### set minimum snakemake version #####
+min_version("5.20.1")
+max_version("5.20.1")
+
+# configfile: "config/config.yaml"
+# report: "report/workflow.rst"
+
+# This should be placed in the Snakefile.
+
+"""
+Working directory
+"""
+
+
+workdir: config["wdir"]
+
+
+# message("The current working directory is " + WDIR)
+
+"""
+ The list of samples to be processed
+"""
+
+# files = pd.read_csv(config['sample_file'], sep = '\t')
+
+# #SAMPLES, = glob_wildcards(config['wdir'] + "/data/" + config['exp'] + "/{smp}.fq.gz")
+# SAMPLES = list(files.label.unique())
+# FILES = list(files.file.unique())
+
+# Check if config["rename_reads"] exists. If not, set it to False.
+
+# Check if config["rename_reads"] exists. If not, set it to False.
+if "rename_reads" not in config:
+    config["rename_reads"] = True
+elif config["rename_reads"] == "":
+    config["rename_reads"] = True
+
+if not isinstance(config["rename_reads"], bool):
+    raise ValueError("The parameter rename_reads only can be 'True' or 'False'")
+    exit(1)
+
+sample_table_read = pd.read_table(
+    config["sample_file_read"], sep="\t", lineterminator="\n"
+)
+
+# let's check that the basic columns are present
+if not all(item in sample_table_read.columns for item in ["label", "file"]):
+    raise ValueError("The sample table must contain the columns 'label' and 'file'")
+    exit(1)
+
+# By default all studies are treated as ancient
+if not "study_type" in sample_table_read.columns:
+    sample_table_read["study_type"] = "ancient"
+
+# Check if element in column is different from list, if not exit with error
+if not all(item in ["ancient", "modern"] for item in sample_table_read.study_type):
+    raise ValueError("The column 'study_type' must contain only 'ancient' or 'modern'")
+    exit(1)
+
+# if derep_reads is not present, set it to True
+derep_reads_cond = [True, False]
+if "derep_reads" in config:
+    if not config["derep_reads"] in derep_reads_cond:
+        raise ValueError("The parameter derep_reads only can be 'True' or 'False'")
+        exit(1)
+else:
+    config["derep_reads"] = True
+
+if config["derep_reads"] is True:
+    sample_table_read["derep_reads"] = "TRUE"
+elif config["derep_reads"] is False:
+    sample_table_read["derep_reads"] = "FALSE"
+
+# If extend_reads is not present, set it to True
+extend_reads_cond = [True, False, "auto"]
+if "extend_reads" in config:
+    if not config["extend_reads"] in extend_reads_cond:
+        raise ValueError(
+            "The parameter extend_reads only can be 'True', 'False' or 'auto'"
+        )
+        exit(1)
+else:
+    config["extend_reads"] = True
+
+# Let's check if we extend or not based on the column study_type
+if config["extend_reads"] is True:
+    sample_table_read["extend_reads"] = "TRUE"
+elif config["extend_reads"] is False:
+    sample_table_read["extend_reads"] = "FALSE"
+else:
+    sample_table_read["extend_reads"] = np.where(
+        sample_table_read["study_type"] == "ancient", "TRUE", "FALSE"
+    )
+
+if not "libprep" in sample_table_read.columns:
+    sample_table_read["libprep"] = "double"
+
+sample_table_read = sample_table_read.drop_duplicates(
+    subset="label", keep="first", inplace=False
+)
+sample_table_read = sample_table_read.dropna()
+
+if not "short_label" in sample_table_read.columns:
+    sample_table_read["short_label"] = sample_table_read.apply(
+        lambda row: get_md5sum(row.label), axis=1
+    )
+sample_table_read.set_index("short_label", inplace=True)
+sample_label_dict_read = sample_table_read.to_dict()["label"]
+sample_label_read = sample_table_read.index.values
+
+
+
+done_dmg_reads = []
+done_nondmg_reads = []
+done_dmg_reads_derep = []
+done_kegg_reads_damaged_out_mm = []
+done_kegg_reads_damaged_out_cov = []
+done_kegg_reads_damaged_out_abun = []
+done_kegg_reads_damaged_out_abun_agg = []
+done_hits_out_damaged = []
+done_hits_modules_out_damaged = []
+done_modules_out_damaged = []
+done_hits_summary_damaged = []
+done_hits_modules_summary_damaged = []
+done_modules_summary_damaged = []
+dbcan_out_mm_dr = []
+dbcan_out_cov_dr = []
+dbcan_out_abun_dr = []
+dbcan_out_abun_agg_dr = []
+dbcan_out_dr = []
+dbcan_group_abundance_summary = []
+dbcan_damaged_group_abundance_summary = []
+
+
+if "get_dmg_reads" in config and config["get_dmg_reads"] is True:
+    done_kegg_reads_damaged_out_mm = (
+        expand(
+            config["rdir"]
+            + "/kegg-reads-damaged/{smp}.profile.damaged.kegg_no-multimap.tsv.gz",
+            smp=sample_label_read,
+        ),
+    )
+    done_kegg_reads_damaged_out_cov = (
+        expand(
+            config["rdir"]
+            + "/kegg-reads-damaged/{smp}.profile.damaged.kegg_cov-stats.tsv.gz",
+            smp=sample_label_read,
+        ),
+    )
+    done_kegg_reads_damaged_out_abun = (
+        expand(
+            config["rdir"]
+            + "/kegg-reads-damaged/{smp}.profile.damaged.kegg_group-abundances-anvio.tsv.gz",
+            smp=sample_label_read,
+        ),
+    )
+    done_kegg_reads_damaged_out_abun_agg = (
+        expand(
+            config["rdir"]
+            + "/kegg-reads-damaged/{smp}.profile.damaged.kegg_group-abundances-agg.tsv.gz",
+            smp=sample_label_read,
+        ),
+    )
+    done_out_tsv = (
+        expand(
+            config["rdir"] + "/kegg-reads-damaged/{smp}.profile.damaged.kegg.tsv.gz",
+            smp=sample_label_read,
+        ),
+    )
+    done_hits_out_damaged = (
+        expand(
+            config["rdir"] + "/kegg-reads-anvio-damaged/{smp}_hits.txt",
+            smp=sample_label_read,
+        ),
+    )
+    done_hits_modules_out_damaged = (
+        expand(
+            config["rdir"] + "/kegg-reads-anvio-damaged/{smp}_module_paths.txt",
+            smp=sample_label_read,
+        ),
+    )
+    done_steps_modules_out_damaged = (
+        expand(
+            config["rdir"] + "/kegg-reads-anvio-damaged/{smp}_module_steps.txt",
+            smp=sample_label_read,
+        ),
+    )
+    done_modules_out_damaged = (
+        expand(
+            config["rdir"] + "/kegg-reads-anvio-damaged/{smp}_modules.txt",
+            smp=sample_label_read,
+        ),
+    )
+    done_hits_summary_damaged = (
+        (config["rdir"] + "/kegg-reads-anvio-damaged/kegg-hits-summary.tsv.gz"),
+    )
+    done_hits_modules_summary_damaged = (
+        (config["rdir"] + "/kegg-reads-anvio-damaged/kegg-hits-modules-summary.tsv.gz"),
+    )
+    done_modules_summary_damaged = (
+        (config["rdir"] + "/kegg-reads-anvio-damaged/kegg-modules-summary.tsv.gz"),
+    ),
+    dbcan_out_mm_dr=expand(
+        config["rdir"]
+        + "/dbcan-reads-damaged/{smp}.profile.damaged.dbcan_no-multimap.tsv.gz",
+        smp=sample_label_read,
+    ),
+    dbcan_out_cov_dr=expand(
+        config["rdir"]
+        + "/dbcan-reads-damaged/{smp}.profile.damaged.dbcan_cov-stats.tsv.gz",
+        smp=sample_label_read,
+    ),
+    dbcan_out_abun_dr=expand(
+        config["rdir"]
+        + "/dbcan-reads-damaged/{smp}.profile.damaged.dbcan_group-abundances-anvio.tsv.gz",
+        smp=sample_label_read,
+    ),
+    dbcan_out_abun_agg_dr=expand(
+        config["rdir"]
+        + "/dbcan-reads-damaged/{smp}.profile.damaged.dbcan_group-abundances-agg.tsv.gz",
+        smp=sample_label_read,
+    ),
+    dbcan_out_dr=expand(
+        config["rdir"] + "/dbcan-reads-damaged/{smp}.profile.damaged.dbcan.tsv.gz",
+        smp=sample_label_read,
+    ),
+    dbcan_group_abundance_summary=(
+        config["rdir"] + "/dbcan-reads/dbcan.group-abundances-agg.tsv.gz"
+    ),
+    dbcan_damaged_group_abundance_summary=(
+        config["rdir"]
+        + "/dbcan-reads-damaged/dbcan.damaged.group-abundances-agg.tsv.gz"
+    ),
+
+
+
+
+rule all:
+    input:
+        done_dmg_reads,
+        done_nondmg_reads,
+        done_dmg_reads_derep,
+        done_kegg_reads_damaged_out_mm,
+        done_kegg_reads_damaged_out_cov,
+        done_kegg_reads_damaged_out_abun,
+        done_kegg_reads_damaged_out_abun_agg,
+        done_hits_out_damaged,
+        done_hits_modules_out_damaged,
+        done_modules_out_damaged,
+        done_hits_summary_damaged,
+        done_hits_modules_summary_damaged,
+        done_modules_summary_damaged,
+        done_initial_stats=expand(
+            config["rdir"] + "/stats/{smp}.stats-initial.txt", smp=sample_label_read
+        ),
+        done_renamed_reads=expand(
+            config["rdir"] + "/read-renamed/{smp}.fq.gz",
+            smp=sample_label_read,
+        ),
+        done_renamed_reads_mapping=expand(
+            config["rdir"] + "/read-renamed/{smp}.mapping.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_read_extension=expand(
+            config["rdir"] + "/read-extension/{smp}.extended.fastq.gz",
+            smp=sample_label_read,
+        ),
+        done_stats_extension=expand(
+            config["rdir"] + "/stats/{smp}.stats-extension.txt", smp=sample_label_read
+        ),
+        done_stats_derep=expand(
+            config["rdir"] + "/stats/{smp}.stats-derep.txt", smp=sample_label_read
+        ),
+        done_stats_derep_summary=(
+            config["rdir"] + "/stats/all.stats-derep-summary.tsv.gz"
+        ),
+        done_stats_initial_summary=(
+            config["rdir"] + "/stats/all.stats-initial-summary.tsv.gz"
+        ),
+        done_stats_extension_summary=(
+            config["rdir"] + "/stats/all.stats-extension-summary.tsv.gz"
+        ),
+        done_read_derep=expand(
+            config["rdir"] + "/read-derep/{smp}.fa.gz", smp=sample_label_read
+        ),
+        done_kegg_reads_out=expand(
+            config["rdir"] + "/kegg-reads/{smp}.profile.kegg.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_kegg_reads_out_mm=expand(
+            config["rdir"] + "/kegg-reads/{smp}.profile.kegg_no-multimap.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_kegg_reads_out_cov=expand(
+            config["rdir"] + "/kegg-reads/{smp}.profile.kegg_cov-stats.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_kegg_reads_out_abun=expand(
+            config["rdir"]
+            + "/kegg-reads/{smp}.profile.kegg_group-abundances-anvio.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_kegg_reads_out_abun_agg=expand(
+            config["rdir"]
+            + "/kegg-reads/{smp}.profile.kegg_group-abundances-agg.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_hits_out=expand(
+            config["rdir"] + "/kegg-reads-anvio/{smp}_hits.txt",
+            smp=sample_label_read,
+        ),
+        done_hits_modules_out=expand(
+            config["rdir"] + "/kegg-reads-anvio/{smp}_module_paths.txt",
+            smp=sample_label_read,
+        ),
+        done_steps_modules_out=expand(
+            config["rdir"] + "/kegg-reads-anvio/{smp}_module_steps.txt",
+            smp=sample_label_read,
+        ),
+        done_modules_out=expand(
+            config["rdir"] + "/kegg-reads-anvio/{smp}_modules.txt",
+            smp=sample_label_read,
+        ),
+        done_hits_summary=(
+            config["rdir"] + "/kegg-reads-anvio/kegg-hits-summary.tsv.gz"
+        ),
+        done_hits_modules_summary=(
+            config["rdir"] + "/kegg-reads-anvio/kegg-hits-modules-summary.tsv.gz"
+        ),
+        done_modules_summary=(
+            config["rdir"] + "/kegg-reads-anvio/kegg-modules-summary.tsv.gz"
+        ),
+        done_dbcan_reads_out=expand(
+            config["rdir"] + "/dbcan-reads/{smp}.profile.dbcan.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_dbcan_reads_out_mm=expand(
+            config["rdir"] + "/dbcan-reads/{smp}.profile.dbcan_no-multimap.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_dbcan_reads_out_cov=expand(
+            config["rdir"] + "/dbcan-reads/{smp}.profile.dbcan_cov-stats.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_dbcan_reads_out_abun=expand(
+            config["rdir"]
+            + "/dbcan-reads/{smp}.profile.dbcan_group-abundances-anvio.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_dbcan_reads_out_abun_agg=expand(
+            config["rdir"]
+            + "/dbcan-reads/{smp}.profile.dbcan_group-abundances-agg.tsv.gz",
+            smp=sample_label_read,
+        ),
+
+"""
+##### load rules #####
+"""
+
+
+include: "rules/stats-initial.smk"
+include: "rules/stats-summary-reads.smk"
+include: "rules/read-rename.smk"
+include: "rules/read-derep.smk"
+include: "rules/read-extension.smk"
+include: "rules/mmseqs-profile-kegg-reads.smk"
+include: "rules/mmseqs-profile-kegg-reads-xfilter.smk"
+include: "rules/mmseqs-profile-kegg-reads-anvio.smk"
+include: "rules/mmseqs-profile-kegg-reads-anvio-summary.smk"
+
+#include: "rules/get-damaged-reads.smk"
+include: "rules/mmseqs-profile-kegg-reads-damaged.smk"
+include: "rules/mmseqs-profile-kegg-reads-damaged-anvio.smk"
+include: "rules/mmseqs-profile-kegg-reads-damaged-summary.smk"
+include: "rules/mmseqs-profile-dbcan-reads.smk"
+include: "rules/mmseqs-profile-dbcan-reads-xfilter.smk"
+include: "rules/mmseqs-profile-dbcan-reads-summary.smk"
+include: "rules/mmseqs-profile-dbcan-reads-damaged.smk"
+include: "rules/mmseqs-profile-dbcan-reads-damaged-summary.smk"

@@ -1,0 +1,253 @@
+wdir: "/maps/projects/fernandezguerra/apps/repos/aMAW-taxonomy"
+sdir: "/maps/projects/fernandezguerra/people/kbd606/projects/kapk/data/all"
+rdir: "/maps/projects/fernandezguerra/people/kbd606/projects/kapk/results"
+
+tmp: "/dev/shm/tmp"
+#sample_file_read: "/maps/projects/fernandezguerra/people/kbd606/projects/kapk/assets/samples-test.tsv"
+sample_file_read: "/maps/projects/fernandezguerra/people/kbd606/projects/kapk/assets/samples-shotgun-with-blanks.tsv"
+###############################################################################
+#
+# Common config values
+#
+###############################################################################
+#Add binary paths
+seqkit_bin: "seqkit"
+
+prefilter_k2_bin: "kraken2"
+conifer_bin: "/maps/projects/lundbeck/people/kbd606/opt/bin/conifer"
+
+bowtie2_bin: "/projects/fernandezguerra/apps/bin/bowtie2"
+bowtie2_build_bin: "bowtie2-build"
+samtools_bin: "samtools"
+picard_jar: "/maps/projects/lundbeck/apps/picard/build/libs/picard.jar"
+awk_bin: mawk
+taxonkit_bin: taxonkit
+csvtk_bin: csvtk
+datamash_bin: datamash
+mmseqs_bin: /maps/projects/lundbeck/people/kbd606/opt/bin/mmseqs
+xfilter_bin: xFilter
+rename_bin: rename.sh
+vsearch_bin: vsearch
+tadpole_bin: tadpole.sh
+loglog_bin: loglog.sh
+filter_bam_bin: filterBAM
+dread_bin: dReads
+# Program parameters
+# Threads
+seqkit_threads: 16
+extract_threads: 8
+norm_threads: 32
+prefilter_k2_threads: 32
+prefilter_get_reads_threads: 8
+read_rename_threads: 16
+read_extension_threads: 32
+read_derep_threads: 8
+bowtie2_tp_threads: 24
+mdmg_threads: 16
+mdmg_cores: 1
+mdmg_cores_pr_fit: 16
+tp_threads: 48
+mmseqs2_threads: 24
+# Rename reads
+rename_reads: False
+read_minlen: 30
+rename_parms: "addunderscore=f overwrite=t"
+
+# Read extension
+extend_reads: True
+loglog_bits: 16
+loglog_hashes: 3
+loglog_table_cap: 0.5
+loglog_memory: "300G"
+loglog_seed: 1234
+tadpole_mode: "extend"
+tadpole_length: 100
+tadpole_memory: "300G"
+tadpole_k: 17
+minprobprefilter: f
+trimends: 9
+prefilter: 0
+# set to 0 for automatic, with a value run will be deterministic (in bytes)
+maxmem: "214748364800"
+ibb: f
+ecc: t
+ecco: f
+conservative: t
+
+# Read dereplication
+derep_reads: True
+use_vsearch: True
+derep_parms: "--strand both --sizeout --fastaout -"
+
+# Prefilter KRAKEN2 profiling
+prefilter_k2_db_coarse: "/scratch/eDNA/DBs/taxdb/v4/kraken2/kraken2_coarse_db/k25-ml23-ms4"
+prefilter_k2_db_coarse_taxonomy: "/scratch/eDNA/DBs/taxdb/v4/taxonomy"
+prefilter_k2_db_coarse_taxo: "/scratch/eDNA/DBs/taxdb/v4/kraken2/kraken2_coarse_db/k25-ml23-ms4/taxo.k2d"
+
+prefilter_k2_db_organelles: "/scratch/eDNA/DBs/taxdb/v4/kraken2/kraken2_coarse_db/k25-ml23-ms4"
+prefilter_k2_db_organelles_taxonomy: "/scratch/eDNA/DBs/taxdb/v4/taxonomy"
+prefilter_k2_db_organelles_taxo: "/scratch/eDNA/DBs/taxdb/v4/kraken2/kraken2_coarse_db/k25-ml23-ms4/taxo.k2d"
+
+k_confidence_organelles: 0.51
+k_confidence_coarse: 0.51
+k_min_hit_group: 4
+k_extra_parms_coarse: "" # --memory-mapping
+k_extra_parms_organelles: "" # --memory-mapping
+k_rtl_organelles: 0.33
+k_rtl_coarse: 0.33
+unique_kmers: 1000
+
+# The input reads can come from two different sources:
+# 1. We use raw reads [raw]
+# 2. The reads come from the path rename-extension-derep [standard]
+# 1. The reads come from the path rename-extension-derep-prefilter [prefilter]
+remove_fastq: True
+remove_bam: True
+profiling_data_input: ["standard"]
+tp_bowtie2_tmp: "/maps/projects/lundbeck/people/kbd606/projects/kapk/results/tmp"
+bowtie2_tp_db: "//maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/db/bowtie2/hires-organelles-viruses-arctic"
+
+# Configuration for bowtie2 searches
+# (-D get automatically set when using -k)
+# We can adjust the % identity in --score-min "L,0,-0.1", where the -0.1 == 90, 0.05 == 95%
+# recommended, good compromise between sensitivity, specificity and speed
+# we allow a mismatch on the seed and report those reads with at least 90% identity
+# -D 15 -R 2 -N 1 -L 22 -i S,1,1.15 --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
+
+# faster:
+# -D 10 -R 2 -N 1 -L 22 -i S,0,2.50 --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
+
+# more sensitive, but ~10X slower
+# Use smaller substring
+# -D 15 -R 2 -N 1 -L 20 -i S,1,1.15  --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
+
+# super sensitive, but ~20X slower
+# Reduce -L if you want to be more sensitive
+# Use smaller substring
+# -D 15 -R 3 -N 1 -L 20 -i S,1,0.5  --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
+
+tp_bowtie2_parms: -D 15 -R 2 -N 1 -L 22 -i S,1,1.15 --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1" --no-unal
+tp_bowtie2_k: [1000]
+tp_sizes: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/misc/genomes.len.map"
+tp_norm_scale: 1M
+tp_filter_sort_mem: 8G
+tp_filter_nreads: 100
+tp_filter_exp_bratio: 0.75
+tp_filter_exp_bratio_dmg: 0.25
+tp_filter_cov_evenness: 0.4
+tp_filter_read_ani: ["94"]
+tp_extra: "-a 90 --read-length-freqs --read-hits-count --include-low-detection --min-breadth 0.01"
+tp_filter_entropy: "auto"
+tp_filter_gini: "auto"
+
+# Picard
+picard_java_opts: "-Xms2g -Xmx100g"
+picard_max_records_in_ram: 25000000
+
+# Samtools
+samtools_view_parms: "-F 4 -b"
+samtools_sort_parms: "-m 8G"
+
+# include unclassified reads
+include_noneuk_nuclear_unclassified: True
+
+# MetaDMG
+mdmg_bin: metaDMG
+mdmg_cpp: "/maps/projects/lundbeck/people/kbd606/opt/bin/metaDMG-cpp"
+mdmg_fixncbi: 1
+mdmg_weight: [1]
+mdmg_mode: ["local", "global", "lca"]
+mdmg_acc2tax: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/taxonomy/acc2taxid.map.gz"
+mdmg_nodes: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/taxonomy/nodes.dmp"
+mdmg_names: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/taxonomy/names.dmp"
+mdmg_extra: "--bayesian"
+#mdmg_extra: ""
+# mdmg_names: "/vol/cloud/geogenetics/DBs/gtdb/r202/woltka/names-mdmg.dmp"
+# mdmg_nodes: "/vol/cloud/geogenetics/DBs/gtdb/r202/woltka/nodes-mdmg.dmp"
+# mdmg_acc2tax: "/vol/cloud/geogenetics/DBs/gtdb/r202/woltka/acc2taxid.map.gz"
+mdmg_positions: 35
+mdmg_lcarank: "''"
+mdmg_simscorelow: 0.90
+mdmg_pmd_threshold: 3
+
+# Recover reads from references with damage
+dread_filter_read_ani: ["94"]
+dread_filter_mdmg: '{"damage": 0.11, "significance": 2}'
+dread_filter_fb: '{"breadth": 0.01, "n_reads": 100}'
+dread_sort_memory: "8G"
+dread_rank: '{"domain":["d__Bacteria", "d__Archaea", "d__Viruses", "d__Eukaryota"]}'
+dread_tax: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/misc/hires-organelles-viruses-arctic.tax.tsv"
+
+bowtie2_dr_threads: 48
+
+dr_fraction: ["damaged", "non-damaged"]
+
+db_mag_distribution: [
+    {
+      "woodcroft2018":
+        {
+          bowtie2_db: "/scratch/eDNA/DBs/misc/woodcroft2018/bowtie2/woodcroft2018",
+          db_mag_sizes: "/scratch/eDNA/DBs/misc/woodcroft2018/bowtie2/woodcroft2018.len.map",
+        },
+    },
+    {
+      "GEM-20220926__tg2g-20220926":
+        {
+          bowtie2_db: "/scratch/eDNA/DBs/misc/kapk-mag-db/bowtie2/GEM-20220926__tg2g-20220926",
+          db_mag_sizes: "/scratch/eDNA/DBs/misc/kapk-mag-db/bowtie2/GEM-20220926__tg2g-20220926.len.map",
+        },
+    },
+    # {
+    #   "TARA__GEM-20220926__tg2g-20220926":
+    #     {
+    #       bowtie2_db: "/scratch/eDNA/DBs/misc/TARA__GEM-20220926__tg2g-20220926/bowtie2/TARA__GEM-20220926__tg2g-20220926",
+    #       db_mag_sizes: "/scratch/eDNA/DBs/misc/TARA__GEM-20220926__tg2g-20220926/bowtie2/TARA__GEM-20220926__tg2g-20220926.len.map",
+    #     },
+    # },
+    {
+      "tg2g-20220926":
+        {
+          bowtie2_db: "/scratch/eDNA/DBs/misc/tg2g-20220926/bowtie2/tg2g-20220926",
+          db_mag_sizes: "/scratch/eDNA/DBs/misc/tg2g-20220926/bowtie2/tg2g-20220926.len.map",
+        },
+    },
+  ]
+
+db_other:
+  [
+    {
+      "archaea-viruses":
+        {
+          bowtie2_db: "/scratch/eDNA/DBs/misc/archaeal-viruses/bowtie2/archaeal-viruses",
+          db_genome_sizes: "/scratch/eDNA/DBs/misc/archaeal-viruses/bowtie2/archaeal-viruses.len.map",
+        },
+    },
+    {
+      "borgs":
+        {
+          bowtie2_db: "/maps/projects/fernandezguerra/people/kbd606/kapk/BORGS/borg-genomes",
+          db_genome_sizes: "/maps/projects/fernandezguerra/people/kbd606/kapk/BORGS/borg-genomes.len.map",
+        },
+    },
+  ]
+# bowtie2_rd_db: "/scratch/eDNA/DBs/misc/woodcroft2018/bowtie2/woodcroft2018"
+# rd_sizes: "/scratch/eDNA/DBs/misc/woodcroft2018/bowtie2/woodcroft2018.len.map"
+# bowtie2_rd_db: "/scratch/eDNA/DBs/misc/kapk-mag-db/bowtie2/GEM-20220926__tg2g-20220926"
+# rd_sizes: "/scratch/eDNA/DBs/misc/kapk-mag-db/bowtie2/GEM-20220926__tg2g-20220926.len.map"
+
+# Best mapping damage reads
+bm_filter_read_ani: ["94", "95", "96", "97", "98", "99"]
+
+# Map aa viruses
+viruses_db_aa:
+  [
+    {
+      "IMGVR4_derepG-archaea":
+        {
+          "mmseqs_db": "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v3/user_supplied/IMGVR4/IMGVR_all_proteins-high_confidence_derepG-archaeal",
+          "mapping_list": "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v3/user_supplied/IMGVR4/IMGVR_all_proteins-high_confidence_derepG-archaeal.gene.lst",
+        },
+    },
+  ]
+mmseqs_viral_parms: "--comp-bias-corr 0 --mask 0 -e 1e-5 --exact-kmer-matching 1 --sub-mat PAM30.out -s 3 -k 6 --spaced-kmer-mode 1 --spaced-kmer-pattern 11011101 --min-length 15 --format-mode 2 -c 0.8 --cov-mode 2 --min-seq-id 0.6"
+xfilter_parms: "-n 25 -b 20 -e 1e-5 --breadth-expected-ratio 0 -f depth_evenness --depth-evenness 1"

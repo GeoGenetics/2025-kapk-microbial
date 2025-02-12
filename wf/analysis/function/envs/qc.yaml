@@ -1,0 +1,13 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - bbmap
+  - fastqc
+  - multiqc
+  - seqkit
+  - pigz
+  - vsearch>=2.21.1
+  - csvtk

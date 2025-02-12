@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - bbmap
+  - megahit
+  - spades
+  - fastqc
+  - multiqc
+  - seqkit
+  - prodigal
+  - abricate

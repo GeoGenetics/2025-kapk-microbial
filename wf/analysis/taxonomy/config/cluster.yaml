@@ -1,0 +1,135 @@
+__default__:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 1
+  memory: 100G
+  partition: cpuqueue,gpuqueue
+
+initial_stats:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 100G
+  partition: cpuqueue,gpuqueue
+
+rename_reads:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 100G
+  partition: cpuqueue,gpuqueue
+
+derep_reads:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 100G
+  partition: cpuqueue,gpuqueue
+
+extension_stats:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 100G
+  partition: cpuqueue,gpuqueue
+
+extend_reads:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 48
+  memory: 500G
+  partition: cpuqueue,gpuqueue
+
+prefilter_profiling_coarse:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 32
+  memory: 300G
+  partition: cpuqueue,gpuqueue
+
+prefilter_profiling_organelles:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 32
+  memory: 300G
+  partition: cpuqueue,gpuqueue
+
+taxonomic_profiling_mapping:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 24
+  memory: 250G
+  partition: cpuqueue,gpuqueue
+
+taxonomic_profiling_filtering:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 48
+  memory: 500G
+  partition: cpuqueue,gpuqueue
+
+metaDMG:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 150G
+  partition: cpuqueue,gpuqueue
+
+prefilter_profiling_get_euk_reads:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 150G
+  partition: cpuqueue,gpuqueue
+
+prefilter_profiling_get_noneuk_nuclear_reads:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 150G
+  partition: cpuqueue,gpuqueue
+
+get_damaged_reads:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 150G
+  partition: cpuqueue,gpuqueue
+
+get_damaged_reads_rank:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 16
+  memory: 150G
+  partition: cpuqueue,gpuqueue
+
+reads_dmg_distribution_mapping:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 48
+  memory: 500G
+  partition: cpuqueue,gpuqueue
+
+reads_dmg_mapping:
+  time: 1000:00:00
+  nodes: 1
+  ntasks_per_node: 1
+  cpus_per_task: 24
+  memory: 250G
+  partition: cpuqueue,gpuqueue

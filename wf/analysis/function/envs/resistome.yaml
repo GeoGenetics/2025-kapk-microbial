@@ -1,0 +1,12 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - hcc
+
+dependencies:
+  - bowtie2
+  - samtools
+  - pip
+  - pip:
+      - bam-filter>=1.0.9

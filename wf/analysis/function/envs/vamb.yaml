@@ -1,0 +1,18 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - pytorch
+dependencies:
+  - python==3.7
+  - metabat2==2.14
+  - samtools
+  - minimap2
+  - picard-slim>=2.23
+  - pytorch
+  - torchvision
+  - cudatoolkit
+  - pip
+  - pip:
+      - Cython>=0.25.2
+      - https://github.com/RasmussenLab/vamb/archive/v3.0.3.zip

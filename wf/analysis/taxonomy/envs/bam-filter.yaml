@@ -1,0 +1,18 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - genomewalker
+dependencies:
+  - python=3.9
+  - bowtie2
+  - seqkit
+  - csvtk
+  - taxonkit
+  - samtools>=1.14
+  - picard
+  - mawk
+  - cxx-compiler
+  - pip
+  - pip:
+      - bam-filter==1.1.27

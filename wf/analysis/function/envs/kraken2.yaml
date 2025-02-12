@@ -1,0 +1,13 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - kraken2=>2.1.1
+  - seqkit
+  - taxonkit
+  - pigz
+  - datamash
+  - csvtk
+  - kaiju

@@ -1,0 +1,21 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - virsorter=2
+  - checkv
+  - dram
+  - click
+  - last
+  - ncbi-genome-download
+  - ruamel.yaml
+  - prodigal=2.6
+  - python=3.8
+  - screed=1
+  - hmmer!=3.3.1
+  - scikit-learn=0.22.1
+  - imbalanced-learn
+  - pandas=1.2
+  - seaborn

@@ -1,0 +1,11 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - pandas
+  - htseq
+  - bedops>=2.4
+  - seqkit
+  - samtools

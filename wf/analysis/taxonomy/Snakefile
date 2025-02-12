@@ -1,0 +1,1225 @@
+import glob
+import pandas as pd
+from snakemake.utils import validate, min_version
+import numpy as np
+
+
+def get_md5sum(x):
+    import hashlib
+
+    return hashlib.md5(x.encode("utf-8")).hexdigest()[:10]
+
+
+"""
+Author: A. Fernandez-Guerra
+Affiliation: Lundbeck Foundation GeoGenetics Centre
+Aim: Taxonomic profiling of ancient samples
+Run: snakemake   -s Snakefile
+"""
+#
+##### set minimum snakemake version #####
+min_version("6.0.0")
+
+# configfile: "config/config.yaml"
+# report: "report/workflow.rst"
+
+# This should be placed in the Snakefile.
+
+"""
+Working directory
+"""
+
+
+workdir: config["wdir"]
+
+
+# message("The current working directory is " + WDIR)
+
+"""
+ The list of samples to be processed
+"""
+
+# Check if config["rename_reads"] exists. If not, set it to False.
+if "rename_reads" not in config:
+    config["rename_reads"] = True
+elif config["rename_reads"] == "":
+    config["rename_reads"] = True
+
+if not isinstance(config["rename_reads"], bool):
+    raise ValueError("The parameter rename_reads only can be 'True' or 'False'")
+    exit(1)
+
+sample_table_read = pd.read_table(
+    config["sample_file_read"], sep="\t", lineterminator="\n"
+)
+
+# let's check that the basic columns are present
+if not all(item in sample_table_read.columns for item in ["label", "file"]):
+    raise ValueError("The sample table must contain the columns 'label' and 'file'")
+    exit(1)
+
+# By default all studies are treated as ancient
+if not "study_type" in sample_table_read.columns:
+    sample_table_read["study_type"] = "ancient"
+
+# Check if element in column is different from list, if not exit with error
+if not all(item in ["ancient", "modern"] for item in sample_table_read.study_type):
+    raise ValueError("The column 'study_type' must contain only 'ancient' or 'modern'")
+    exit(1)
+
+# if derep_reads is not present, set it to True
+true_or_false_cond = [True, False]
+if "derep_reads" in config:
+    if not config["derep_reads"] in true_or_false_cond:
+        raise ValueError("The parameter derep_reads only can be 'True' or 'False'")
+        exit(1)
+else:
+    config["derep_reads"] = True
+
+if config["derep_reads"] is True:
+    sample_table_read["derep_reads"] = "TRUE"
+elif config["derep_reads"] is False:
+    sample_table_read["derep_reads"] = "FALSE"
+
+# if derep_reads is not present, set it to True
+if "use_vsearch" in config:
+    if not config["use_vsearch"] in true_or_false_cond:
+        raise ValueError("The parameter derep_reads only can be 'True' or 'False'")
+        exit(1)
+else:
+    config["use_vsearch"] = False
+
+if config["use_vsearch"] is True:
+    config["use_vsearch"] = "TRUE"
+elif config["use_vsearch"] is False:
+    config["use_vsearch"] = "FALSE"
+
+# If extend_reads is not present, set it to True
+extend_reads_cond = [True, False, "auto"]
+if "extend_reads" in config:
+    if not config["extend_reads"] in extend_reads_cond:
+        raise ValueError(
+            "The parameter extend_reads only can be 'True', 'False' or 'auto'"
+        )
+        exit(1)
+else:
+    config["extend_reads"] = True
+
+# Let's check if we extend or not based on the column study_type
+if config["extend_reads"] is True:
+    sample_table_read["extend_reads"] = "TRUE"
+elif config["extend_reads"] is False:
+    sample_table_read["extend_reads"] = "FALSE"
+else:
+    sample_table_read["extend_reads"] = np.where(
+        sample_table_read["study_type"] == "ancient", "TRUE", "FALSE"
+    )
+
+if not "libprep" in sample_table_read.columns:
+    sample_table_read["libprep"] = "double"
+
+sample_table_read = sample_table_read.drop_duplicates(
+    subset="label", keep="first", inplace=False
+)
+sample_table_read = sample_table_read.dropna()
+
+if not "short_label" in sample_table_read.columns:
+    sample_table_read["short_label"] = sample_table_read.apply(
+        lambda row: get_md5sum(row.label), axis=1
+    )
+sample_table_read.set_index("short_label", inplace=True)
+sample_label_dict_read = sample_table_read.to_dict()["label"]
+sample_label_read = sample_table_read.index.values
+
+
+# Should we remove big BAM file after mapping
+if "remove_bam" not in config:
+    config["remove_bam"] = False
+elif config["remove_bam"] == "":
+    config["remove_bam"] = False
+
+
+if not isinstance(config["remove_bam"], bool):
+    raise ValueError("The parameter remove_bam only can be 'True' or 'False'")
+    exit(1)
+
+if config["remove_bam"] is True:
+    config["remove_bam"] = "TRUE"
+elif config["remove_bam"] is False:
+    config["remove_bam"] = "FALSE"
+
+# Should we remove dereplicated fastq file after mapping
+if "remove_fastq" not in config:
+    config["remove_fastq"] = False
+elif config["remove_fastq"] == "":
+    config["remove_fastq"] = False
+
+
+if not isinstance(config["remove_fastq"], bool):
+    raise ValueError("The parameter remove_fastq only can be 'True' or 'False'")
+    exit(1)
+
+if config["remove_fastq"] is True:
+    config["remove_fastq"] = "TRUE"
+elif config["remove_fastq"] is False:
+    config["remove_fastq"] = "FALSE"
+
+valid_fastq_input = ["raw", "standard"]
+if not (set(config["profiling_data_input"]).issubset(set(valid_fastq_input))):
+    raise ValueError(
+        "The parameter profiling_data_input only can be 'raw' or 'standard'"
+    )
+    exit(1)
+
+if "profiling_data_input" not in config:
+    config["profiling_data_input"] = ["standard"]
+elif config["profiling_data_input"] == "":
+    config["profiling_data_input"] = ["standard"]
+
+dr_fraction = ["damaged", "non-damaged"]
+
+if "dr_fraction" not in config:
+    config["dr_fraction"] = ["damaged"]
+elif config["dr_fraction"] == "":
+    config["dr_fraction"] = ["damaged"]
+elif not isinstance(config["dr_fraction"], list):
+    raise ValueError("The parameter dr_fraction only can be a list")
+    exit(1)
+
+if not (set(config["dr_fraction"]).issubset(set(dr_fraction))):
+    raise ValueError("The parameter dr_fraction only can be 'damaged' or 'non-damaged'")
+    exit(1)
+
+
+mag_dbs = [list(x.keys())[0] for x in config["db_mag_distribution"]]
+other_dbs = [list(x.keys())[0] for x in config["db_other"]]
+viral_dbs_aa = [list(x.keys())[0] for x in config["viruses_db_aa"]]
+
+
+rule all:
+    input:
+        done_initial_stats=expand(
+            config["rdir"] + "/stats/{smp}.stats-initial.txt", smp=sample_label_read
+        ),
+        done_renamed_reads=expand(
+            config["rdir"] + "/read-renamed/{smp}.fq.gz",
+            smp=sample_label_read,
+        ),
+        done_renamed_reads_mapping=expand(
+            config["rdir"] + "/read-renamed/{smp}.mapping.tsv.gz",
+            smp=sample_label_read,
+        ),
+        done_read_extension=expand(
+            config["rdir"] + "/read-extension/{smp}.extended.fastq.gz",
+            smp=sample_label_read,
+        ),
+        done_stats_extension=expand(
+            config["rdir"] + "/stats/{smp}.stats-extension.txt", smp=sample_label_read
+        ),
+        done_stats_derep=expand(
+            config["rdir"] + "/stats/{smp}.stats-derep.txt", smp=sample_label_read
+        ),
+        done_stats_derep_summary=(
+            config["rdir"] + "/stats/all.stats-derep-summary.tsv.gz"
+        ),
+        done_stats_initial_summary=(
+            config["rdir"] + "/stats/all.stats-initial-summary.tsv.gz"
+        ),
+        done_stats_extension_summary=(
+            config["rdir"] + "/stats/all.stats-extension-summary.tsv.gz"
+        ),
+        done_read_derep=expand(
+            config["rdir"] + "/read-derep/{smp}.fa.gz", smp=sample_label_read
+        ),
+
+        done_bowtie2_bam_dedup=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{smp}.dedup.bam",
+            smp=sample_label_read,
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_bowtie2_bam_dedup_filt=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{smp}.dedup.filtered.bam",
+            smp=sample_label_read,
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_bowtie2_bam_dedup_metrics=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{smp}.dedup.metrics",
+            smp=sample_label_read,
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        tp_stats=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{smp}.dedup_stats.tsv.gz",
+            smp=sample_label_read,
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        tp_stats_filt=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{smp}.dedup_stats-filtered.tsv.gz",
+            smp=sample_label_read,
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_tp_summary_map_stats=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/tp-summary-mapping.tsv.gz",
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_tp_stats_summary=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/tp-mapping.summary.tsv.gz",
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_tp_stats_filtered_summary=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/tp-mapping-filtered.summary.tsv.gz",
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_mdmg_outdir=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-dmg/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{dmg_mode}"
+            + "/{smp}.tp-mdmg.weight-{weight}.tar.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            dmg_mode=config["mdmg_mode"],
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_mdmg_csv=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-dmg/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{dmg_mode}"
+            + "/{smp}.tp-mdmg.weight-{weight}.csv.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            dmg_mode=config["mdmg_mode"],
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        done_mdmg_misincorporation=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-dmg/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{dmg_mode}"
+            + "/{smp}.tp-mdmg.misincorporation.weight-{weight}.txt.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            dmg_mode=config["mdmg_mode"],
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        # done_mdmg_pmd=expand(
+        #     config["rdir"]
+        #     + "/taxonomic-profiling-dmg/{smp}.tp-mdmg.{dmg_mode}.pmd.weight-{weight}.txt.gz",
+        #     smp=sample_label_read,
+        #     weight=config["mdmg_weight"],
+        #     dmg_mode=config["mdmg_mode"],
+        # ),
+        done_mdmg_summary=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-dmg/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{dmg_mode}"
+            + "/tp-mdmg.weight-{weight}.csv.gz",
+            weight=config["mdmg_weight"],
+            dmg_mode=config["mdmg_mode"],
+            read_ani=config["tp_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        # done_dmg_pmd_summary=expand(
+        #     config["rdir"]
+        #     + "/taxonomic-profiling-dmg/tp-mdmg.{dmg_mode}.pmd.weight-{weight}.csv.gz",
+        #     weight=config["mdmg_weight"],
+        #     dmg_mode=config["mdmg_mode"],
+        # ),
+        dmg_reads_bact=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Bacteria.damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        nondmg_reads_bact=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Bacteria.non-damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        multi_reads_bact=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Bacteria.multi.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        dmg_reads_arc=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Archaea.damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        nondmg_reads_arc=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Archaea.non-damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        multi_reads_arc=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Archaea.multi.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        dmg_reads_vir=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Viruses.damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        nondmg_reads_vir=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Viruses.non-damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        multi_reads_vir=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Viruses.multi.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        dmg_reads_euk=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Eukaryota.damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        nondmg_reads_euk=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Eukaryota.non-damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        multi_reads_euk=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.d__Eukaryota.multi.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        discarded=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.discarded.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        dmg_reads_rank=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        dmg_reads_derep_rank=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.damaged.derep.fasta.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        nondmg_reads_rank=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.non-damaged.fastq.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        nondmg_reads_derep_rank=expand(
+            config["rdir"]
+            + "/read-dmg-rank/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{smp}.non-damaged.derep.fasta.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+        ),
+        bowtie2_bam_dedup_rd=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.dmg-reads.dedup.bam",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        bowtie2_bam_dedup_metrics_rd=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.dmg-reads.dedup.metrics",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        bowtie2_bam_dedup_filt_rd=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.dmg-reads.dedup.filtered.bam",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        tp_stats_rd=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.dmg-reads.dedup_stats.tsv.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        tp_stats_filt_rd=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.dmg-reads.dedup_stats-filtered.tsv.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        tp_summary_map_stats_dr=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/tp-summary-mapping.tsv.gz",
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        tp_stats_summary_dr=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/tp-mapping.summary.tsv.gz",
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        tp_stats_filtered_summary_dr=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/tp-mapping-filtered.summary.tsv.gz",
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        mdmg_outdir_dr=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.tp-mdmg.weight-{weight}.tar.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        mdmg_csv_dr=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.tp-mdmg.weight-{weight}.csv.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        mdmg_misincorporation_dr=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/{smp}.tp-mdmg.misincorporation.weight-{weight}.txt.gz",
+            smp=sample_label_read,
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        dmg_summary=expand(
+            config["rdir"]
+            + "/reads-dmg-distribution-mags-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{mag_db}"
+            + "/{dr_fraction}"
+            + "/tp-mdmg.weight-{weight}.csv.gz",
+            weight=config["mdmg_weight"],
+            read_ani=config["dread_filter_read_ani"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            mag_db=mag_dbs,
+            dr_fraction=config["dr_fraction"],
+        ),
+        other_bowtie2_bam_dedup=expand(
+            config["rdir"]
+            + "/other-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{other_db}"
+            + "/{smp}.dedup.bam",
+            smp=sample_label_read,
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            other_db=other_dbs,
+        ),
+        other_bowtie2_bam_dedup_metrics=expand(
+            config["rdir"]
+            + "/other-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{other_db}"
+            + "/{smp}.dedup.metrics",
+            smp=sample_label_read,
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            other_db=other_dbs,
+        ),
+        other_bowtie2_bam_dedup_filt=expand(
+            config["rdir"]
+            + "/other-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{other_db}"
+            + "/{smp}.dmg-reads.dedup.filtered.bam",
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            other_db=other_dbs,
+            smp=sample_label_read,
+        ),
+        other_tp_stats=expand(
+            config["rdir"]
+            + "/other-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{other_db}"
+            + "/{smp}.dmg-reads.dedup_stats.tsv.gz",
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            other_db=other_dbs,
+            smp=sample_label_read,
+        ),
+        other_tp_stats_filt=expand(
+            config["rdir"]
+            + "/other-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/{other_db}"
+            + "/{smp}.dmg-reads.dedup_stats-filtered.tsv.gz",
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            other_db=other_dbs,
+            smp=sample_label_read,
+        ),
+        done_bm_bowtie2_bam_dedup=expand(
+            config["rdir"]
+            + "/reads-dmg-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{smp}.dmg-reads.dedup.bam",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_bowtie2_bam_dedup_metrics=expand(
+            config["rdir"]
+            + "/reads-dmg-mapping/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{smp}.dmg-reads.dedup.metrics",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_bowtie2_bam_dedup_filt=expand(
+            config["rdir"]
+            + "/reads-dmg-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/{smp}.dmg-reads.dedup.filtered.bam",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_tp_stats=expand(
+            config["rdir"]
+            + "/reads-dmg-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/{smp}.dmg-reads.dedup_stats.tsv.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_tp_stats_filt=expand(
+            config["rdir"]
+            + "/reads-dmg-filtering/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/{smp}.dmg-reads.dedup_stats-filtered.tsv.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_mdmg_outdir=expand(
+            config["rdir"]
+            + "/reads-dmg-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/{smp}.tp-mdmg.weight-{weight}.tar.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_mdmg_csv=expand(
+            config["rdir"]
+            + "/reads-dmg-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/{smp}.tp-mdmg.weight-{weight}.csv.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_mdmg_misincorporation=expand(
+            config["rdir"]
+            + "/reads-dmg-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/{smp}.tp-mdmg.misincorporation.weight-{weight}.txt.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            smp=sample_label_read,
+        ),
+        done_bm_tp_summary_map_stats=expand(
+            config["rdir"]
+            + "/reads-dmg-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/tp-summary-mapping.tsv.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_tp_stats_summary=expand(
+            config["rdir"]
+            + "/reads-dmg-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/tp-mapping.summary.tsv.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_tp_stats_filtered_summary=expand(
+            config["rdir"]
+            + "/reads-dmg-summary/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/weight-{weight}"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/tp-mapping-filtered.summary.tsv.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        done_bm_dmg_summary=expand(
+            config["rdir"]
+            + "/reads-dmg-metaDMG/"
+            + "{indata}"
+            + "/k{tp_bowtie2_k}"
+            + "/{read_ani}"
+            + "/local"
+            + "/{dr_fraction}"
+            + "/{bm_read_ani}"
+            + "/tp-mdmg.weight-{weight}.csv.gz",
+            weight=config["mdmg_weight"],
+            indata=config["profiling_data_input"],
+            tp_bowtie2_k=config["tp_bowtie2_k"],
+            read_ani=config["tp_filter_read_ani"],
+            bm_read_ani=config["bm_filter_read_ani"],
+            dr_fraction=config["dr_fraction"],
+            smp=sample_label_read,
+        ),
+        out_viruses_aa=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-mapping-aa/"
+            + "{indata}"
+            + "/{viruses_db_aa}"
+            + "/{smp}.tsv.gz",
+            indata=config["profiling_data_input"],
+            viruses_db_aa=viral_dbs_aa,
+            smp=sample_label_read,
+        ),
+        out_mm=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering-aa/"
+            + "{indata}"
+            + "/{viruses_db_aa}"
+            + "/{smp}.profile.viral_no-multimap.tsv.gz",
+            indata=config["profiling_data_input"],
+            viruses_db_aa=viral_dbs_aa,
+            smp=sample_label_read,
+        ),
+        out_cov=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering-aa/"
+            + "{indata}"
+            + "/{viruses_db_aa}"
+            + "/{smp}.profile.viral_cov-stats.tsv.gz",
+            indata=config["profiling_data_input"],
+            viruses_db_aa=viral_dbs_aa,
+            smp=sample_label_read,
+        ),
+        out_abun_agg=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering-aa/"
+            + "{indata}"
+            + "/{viruses_db_aa}"
+            + "/{smp}.profile.viral_group-abundances-agg.tsv.gz",
+            indata=config["profiling_data_input"],
+            viruses_db_aa=viral_dbs_aa,
+            smp=sample_label_read,
+        ),
+        out_abun=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering-aa/"
+            + "{indata}"
+            + "/{viruses_db_aa}"
+            + "/{smp}.profile.viral_group-abundances.tsv.gz",
+            indata=config["profiling_data_input"],
+            viruses_db_aa=viral_dbs_aa,
+            smp=sample_label_read,
+        ),
+        viral_group_abundance_summary=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering-aa/"
+            + "{indata}"
+            + "/{viruses_db_aa}/{viruses_db_aa}-profiling.group-abundances-agg.tsv.gz",
+            indata=config["profiling_data_input"],
+            viruses_db_aa=viral_dbs_aa,
+            smp=sample_label_read,
+        ),
+        viral_abundance_summary=expand(
+            config["rdir"]
+            + "/taxonomic-profiling-filtering-aa/"
+            + "{indata}"
+            + "/{viruses_db_aa}/{viruses_db_aa}-profiling.group-abundances.tsv.gz",
+            indata=config["profiling_data_input"],
+            viruses_db_aa=viral_dbs_aa,
+            smp=sample_label_read,
+        ),
+
+"""
+##### load rules #####
+"""
+
+
+include: "rules/stats-initial.smk"
+include: "rules/stats-summary-reads.smk"
+include: "rules/read-rename.smk"
+include: "rules/read-derep.smk"
+include: "rules/read-extension.smk"
+
+include: "rules/taxonomic-profiling-mapping.smk"
+include: "rules/taxonomic-profiling-filtering.smk"
+include: "rules/taxonomic-profiling-summary.smk"
+include: "rules/metaDMG.smk"
+include: "rules/metaDMG-summary.smk"
+# include: "rules/get-damaged-reads.smk"
+include: "rules/get-damaged-reads-rank.smk"
+include: "rules/dmg-reads-distribution-mags-mapping.smk"
+include: "rules/dmg-reads-distribution-mags-filtering.smk"
+include: "rules/dmg-reads-distribution-mags-summary.smk"
+include: "rules/dmg-reads-distribution-mags-metaDMG.smk"
+include: "rules/dmg-reads-distribution-mags-metaDMG-summary.smk"
+include: "rules/other-db-mapping.smk"
+include: "rules/other-db-filtering.smk"
+include: "rules/dmg-reads-mapping.smk"
+include: "rules/dmg-reads-filtering.smk"
+include: "rules/dmg-reads-metaDMG.smk"
+include: "rules/dmg-reads-mapping-summary.smk"
+include: "rules/dmg-reads-metaDMG-summary.smk"
+include: "rules/taxonomic-profiling-viruses-aa-mapping.smk"
+include: "rules/taxonomic-profiling-viruses-aa-filtering.smk"
+include: "rules/taxonomic-profiling-viruses-aa-summary.smk"

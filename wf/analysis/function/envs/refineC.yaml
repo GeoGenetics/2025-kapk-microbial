@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - genomewalker
+
+dependencies:
+  - python>=3.6,<3.7
+  - seqkit
+  - csvtk
+  - refine-contigs>=1.0.2
+  - pip
+  - pip:
+      - datatable>=1.0.0

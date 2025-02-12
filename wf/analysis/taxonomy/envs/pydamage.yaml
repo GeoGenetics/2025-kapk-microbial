@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - samtools>=1.10
+  - bbmap
+  - biopython>=1.78
+  - csvtk
+  - seqkit
+  - pip
+  - pip:
+      - git+https://github.com/maxibor/pydamage.git

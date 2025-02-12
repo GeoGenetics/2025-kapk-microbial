@@ -1,0 +1,11 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.9
+  - pigz
+  - pip
+  - seqkit
+  - pip:
+      - dmg-reads==1.0.5

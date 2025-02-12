@@ -1,0 +1,9 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - motus=2.6.1
+  - seqkit
+  - csvtk

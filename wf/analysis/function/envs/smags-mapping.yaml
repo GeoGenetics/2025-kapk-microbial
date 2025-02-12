@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - genomewalker
+dependencies:
+  - bowtie2>=2.4
+  - picard-slim>=2.23
+  - bedtools>=2.29
+  - bedops>=2.4
+  - seqkit
+  - bbmap
+  - csvtk
+  - samtools>=1.14
+  - bam-filter>=0.0.16

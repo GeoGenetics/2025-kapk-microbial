@@ -1,0 +1,13 @@
+channels:
+  - conda-forge
+dependencies:
+  - python==3.9
+  - htslib
+  - cxx-compiler
+  - gsl
+  - eigen
+  - pip
+  - pip:
+      - attrs
+      - metaDMG[fit]>=0.37.1
+      - logger_tt==1.7.0
