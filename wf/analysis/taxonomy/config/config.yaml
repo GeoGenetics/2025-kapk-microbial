@@ -1,5 +1,9 @@
+# Basic config File
+# Where is the workflow
 wdir: "/projects/fernandezguerra/apps/repos/2025-kapk-microbial/wf/analysis/taxonomy"
+# Where is the data
 sdir: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/data"
+# Where is the output
 rdir: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/results"
 
 tmp: "/dev/shm/tmp"

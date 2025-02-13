@@ -1,6 +1,6 @@
 import glob
 import pandas as pd
-from snakemake.utils import validate, min_version, max_version
+from snakemake.utils import validate, min_version
 
 
 def get_md5sum(x):
@@ -17,8 +17,8 @@ Run: snakemake   -s Snakefile
 """
 #
 ##### set minimum snakemake version #####
-min_version("5.20.1")
-max_version("5.20.1")
+min_version("6.0.0")
+
 
 # configfile: "config/config.yaml"
 # report: "report/workflow.rst"
@@ -129,7 +129,6 @@ sample_label_read = sample_table_read.index.values
 
 
 done_dmg_reads = []
-done_nondmg_reads = []
 done_dmg_reads_derep = []
 done_kegg_reads_damaged_out_mm = []
 done_kegg_reads_damaged_out_cov = []
@@ -256,7 +255,6 @@ if "get_dmg_reads" in config and config["get_dmg_reads"] is True:
 rule all:
     input:
         done_dmg_reads,
-        done_nondmg_reads,
         done_dmg_reads_derep,
         done_kegg_reads_damaged_out_mm,
         done_kegg_reads_damaged_out_cov,

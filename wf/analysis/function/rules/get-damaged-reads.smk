@@ -8,7 +8,6 @@ rule get_damaged_reads:
         ),
     output:
         dmg_reads=config["rdir"] + "/read-dmg/{smp}.damaged.fastq.gz",
-        nondmg_reads=config["rdir"] + "/read-dmg/{smp}.nondamaged.fastq.gz",
         dmg_reads_derep=config["rdir"] + "/read-dmg/{smp}.damaged.derep.fasta.gz",
     threads: config["seqkit_threads"]
     params:

@@ -176,7 +176,7 @@ if "profiling_data_input" not in config:
 elif config["profiling_data_input"] == "":
     config["profiling_data_input"] = ["standard"]
 
-dr_fraction = ["damaged", "non-damaged"]
+dr_fraction = ["damaged"]
 
 if "dr_fraction" not in config:
     config["dr_fraction"] = ["damaged"]
