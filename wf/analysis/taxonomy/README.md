@@ -1,4 +1,4 @@
-# Ancient Metagenomics Analysis Workflow
+# Ancient Metagenomics Analysis Workflow: taxonomy
 
 A Snakemake workflow for analyzing ancient DNA (aDNA) sequences with a focus on taxonomic profiling and damage pattern analysis.
 
@@ -192,4 +192,4 @@ https://doi.org/10.1101/2023.06.10.544454
 
 ## Contact
 
-antonio@metagenomics.eu
+For questions or issues, please open an issue in the repository.

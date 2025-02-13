@@ -384,7 +384,6 @@ include: "rules/mmseqs-profile-kegg-reads-xfilter.smk"
 include: "rules/mmseqs-profile-kegg-reads-anvio.smk"
 include: "rules/mmseqs-profile-kegg-reads-anvio-summary.smk"
 
-#include: "rules/get-damaged-reads.smk"
 include: "rules/mmseqs-profile-kegg-reads-damaged.smk"
 include: "rules/mmseqs-profile-kegg-reads-damaged-anvio.smk"
 include: "rules/mmseqs-profile-kegg-reads-damaged-summary.smk"
