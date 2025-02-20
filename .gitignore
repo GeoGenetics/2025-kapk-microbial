@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+old/*
+data/old/*
+results/old/*
+figures/old/*
+data/*
+analysis/data/*
+analysis/results/*
+~$*.*
+*.Rproj
