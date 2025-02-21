@@ -1,6 +1,6 @@
 # Ancient Metagenomics Analysis for the Kap København microbial manuscript
 
-This repository contains the complete analysis pipeline and downstream analysis code for processing and analyzing ancient DNA (aDNA) metagenomic data. The project is organized into two main components: workflow pipelines (`wf/`) and analysis code (`analysis/`).
+This repository contains the complete analysis pipeline and downstream analysis code for processing and analyzing ancient DNA (aDNA) metagenomic data. The project is organized into two main components: processing workflow (`wf/`) and analysis code (`analysis/`).
 
 ## Data Availability
 
