@@ -1,14 +1,14 @@
 # Basic config File
 # Where is the workflow
-wdir: "/projects/fernandezguerra/apps/repos/2025-kapk-microbial/wf/analysis/taxonomy"
+wdir: "/path/to/workflow/taxonomy"
 # Where is the data
-sdir: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/data"
+sdir: "/path/to/input/data"
 # Where is the output
-rdir: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/results"
+rdir: "/path/to/results"
 
-tmp: "/dev/shm/tmp"
-#sample_file_read: "/maps/projects/fernandezguerra/people/kbd606/projects/kapk/assets/samples-test.tsv"
-sample_file_read: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/assets/samples.tsv"
+tmp: "/path/to/tmp"
+sample_file_read: "/path/to/assets/samples.tsv"
+
 ###############################################################################
 #
 # Common config values
@@ -16,11 +16,10 @@ sample_file_read: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbia
 ###############################################################################
 #Add binary paths
 seqkit_bin: "seqkit"
-
 bowtie2_bin: "bowtie2"
 bowtie2_build_bin: "bowtie2-build"
 samtools_bin: "samtools"
-picard_jar: "/maps/projects/lundbeck/apps/picard/build/libs/picard.jar"
+picard_jar: "/path/to/picard/picard.jar"
 awk_bin: mawk
 taxonkit_bin: taxonkit
 csvtk_bin: csvtk
@@ -33,6 +32,7 @@ tadpole_bin: tadpole.sh
 loglog_bin: loglog.sh
 filter_bam_bin: filterBAM
 dread_bin: dReads
+
 # Program parameters
 # Threads
 seqkit_threads: 16
@@ -47,6 +47,7 @@ mdmg_cores: 1
 mdmg_cores_pr_fit: 16
 tp_threads: 48
 mmseqs2_threads: 24
+
 # Rename reads
 rename_reads: False
 read_minlen: 30
@@ -66,7 +67,6 @@ tadpole_k: 17
 minprobprefilter: f
 trimends: 9
 prefilter: 0
-# set to 0 for automatic, with a value run will be deterministic (in bytes)
 maxmem: "214748364800"
 ibb: f
 ecc: t
@@ -85,31 +85,13 @@ derep_parms: "--strand both --sizeout --fastaout -"
 remove_fastq: True
 remove_bam: True
 profiling_data_input: ["standard"]
-tp_bowtie2_tmp: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/results/tmp"
-bowtie2_tp_db: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/db/bowtie2/hires-organelles-viruses-arctic"
+tp_bowtie2_tmp: "/path/to/tmp"
+bowtie2_tp_db: "/path/to/db/bowtie2/hires-organelles-viruses-arctic"
 
 # Configuration for bowtie2 searches
-# (-D get automatically set when using -k)
-# We can adjust the % identity in --score-min "L,0,-0.1", where the -0.1 == 90, 0.05 == 95%
-# recommended, good compromise between sensitivity, specificity and speed
-# we allow a mismatch on the seed and report those reads with at least 90% identity
-# -D 15 -R 2 -N 1 -L 22 -i S,1,1.15 --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
-
-# faster:
-# -D 10 -R 2 -N 1 -L 22 -i S,0,2.50 --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
-
-# more sensitive, but ~10X slower
-# Use smaller substring
-# -D 15 -R 2 -N 1 -L 20 -i S,1,1.15  --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
-
-# super sensitive, but ~20X slower
-# Reduce -L if you want to be more sensitive
-# Use smaller substring
-# -D 15 -R 3 -N 1 -L 20 -i S,1,0.5  --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1"
-
 tp_bowtie2_parms: -D 15 -R 2 -N 1 -L 22 -i S,1,1.15 --np 1 --mp "1,1" --rdg "0,1" --rfg "0,1" --score-min "L,0,-0.1" --no-unal
 tp_bowtie2_k: [1000]
-tp_sizes: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/misc/genomes.len.map"
+tp_sizes: "/path/to/db/genomes.len.map"
 tp_norm_scale: 1M
 tp_filter_sort_mem: 8G
 tp_filter_nreads: 100
@@ -134,13 +116,13 @@ include_noneuk_nuclear_unclassified: True
 
 # MetaDMG
 mdmg_bin: metaDMG
-mdmg_cpp: "/maps/projects/lundbeck/people/kbd606/opt/bin/metaDMG-cpp"
+mdmg_cpp: "/path/to/metaDMG-cpp"
 mdmg_fixncbi: 1
 mdmg_weight: [1]
 mdmg_mode: ["local", "global", "lca"]
-mdmg_acc2tax: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/taxonomy/acc2taxid.map.gz"
-mdmg_nodes: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/taxonomy/nodes.dmp"
-mdmg_names: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/taxonomy/names.dmp"
+mdmg_acc2tax: "/path/to/db/taxonomy/acc2taxid.map.gz"
+mdmg_nodes: "/path/to/db/taxonomy/nodes.dmp"
+mdmg_names: "/path/to/db/taxonomy/names.dmp"
 mdmg_extra: "--bayesian"
 mdmg_positions: 35
 mdmg_lcarank: "''"
@@ -153,7 +135,7 @@ dread_filter_mdmg: '{"damage": 0.11, "significance": 2}'
 dread_filter_fb: '{"breadth": 0.01, "n_reads": 100}'
 dread_sort_memory: "8G"
 dread_rank: '{"domain":["d__Bacteria", "d__Archaea", "d__Viruses", "d__Eukaryota"]}'
-dread_tax: "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v6/results/flavors/hires-organelles-viruses-arctic/pkg/misc/hires-organelles-viruses-arctic.tax.tsv"
+dread_tax: "/path/to/db/tax/hires-organelles-viruses-arctic.tax.tsv"
 
 bowtie2_dr_threads: 48
 
@@ -164,15 +146,15 @@ db_mag_distribution:
     {
       "woodcroft2018":
         {
-          bowtie2_db: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/db/misc/bowtie2/woodcroft2018",
-          db_mag_sizes: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/db/misc/bowtie2/woodcroft2018.len.map",
+          bowtie2_db: "/path/to/db/bowtie2/woodcroft2018",
+          db_mag_sizes: "/path/to/db/bowtie2/woodcroft2018.len.map",
         },
     },
     {
       "GEM-20220926__tg2g-20220926":
         {
-          bowtie2_db: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/db/misc/bowtie2/GEM-20220926__tg2g-20220926",
-          db_mag_sizes: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/db/misc/bowtie2/GEM-20220926__tg2g-20220926.len.map",
+          bowtie2_db: "/path/to/db/bowtie2/GEM-20220926__tg2g-20220926",
+          db_mag_sizes: "/path/to/db/bowtie2/GEM-20220926__tg2g-20220926.len.map",
         },
     },
   ]
@@ -182,15 +164,15 @@ db_other:
     {
       "archaea-viruses":
         {
-          bowtie2_db: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/db/misc/bowtie2/archaeal-viruses",
-          db_genome_sizes: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/db/misc/bowtie2/archaeal-viruses.len.map",
+          bowtie2_db: "/path/to/db/bowtie2/archaeal-viruses",
+          db_genome_sizes: "/path/to/db/bowtie2/archaeal-viruses.len.map",
         },
     },
     {
       "borgs":
         {
-          bowtie2_db: "/maps/projects/caeg/people/kbd606/projects/2025-kapk-microbial-submission/test-data-wf/db/misc/bowtie2/borg-genomes",
-          db_genome_sizes: "/maps/projects/fernandezguerra/people/kbd606/kapk/BORGS/borg-genomes.len.map",
+          bowtie2_db: "/path/to/db/bowtie2/borg-genomes",
+          db_genome_sizes: "/path/to/db/bowtie2/borg-genomes.len.map",
         },
     },
   ]
@@ -204,8 +186,8 @@ viruses_db_aa:
     {
       "IMGVR4_derepG-archaea":
         {
-          "mmseqs_db": "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v3/user_supplied/IMGVR4/IMGVR_all_proteins-high_confidence_derepG-archaeal",
-          "mapping_list": "/maps/projects/fernandezguerra/people/kbd606/projects/taxDB/20220926/TaxDB_v3/user_supplied/IMGVR4/IMGVR_all_proteins-high_confidence_derepG-archaeal.gene.lst",
+          "mmseqs_db": "/path/to/db/IMGVR4/IMGVR_all_proteins-high_confidence_derepG-archaeal",
+          "mapping_list": "/path/to/db/IMGVR4/IMGVR_all_proteins-high_confidence_derepG-archaeal.gene.lst",
         },
     },
   ]
