@@ -35,7 +35,7 @@ load_initial_data <- function() {
     tax_data <- read_tsv(
         file.path(RESULTS_DIR, "taxonomy/tp-mapping-filtered.nocontam.10M.tax.tsv.gz"),
         show_col_types = FALSE
-    ) %>%
+    ) |>
         inner_join(kapk_cdata)
 
     # Load taxonomic annotations
@@ -43,7 +43,7 @@ load_initial_data <- function() {
         file.path(DATA_DIR, "taxonomy/hires-organelles-viruses-arctic.tax.tsv"),
         col_names = c("reference", "tax_string"),
         show_col_types = FALSE
-    ) %>%
+    ) |>
         separate(
             col = tax_string,
             sep = ";",
@@ -55,7 +55,7 @@ load_initial_data <- function() {
         )
 
     # Load damage data
-    dmg_local <- read_csv(file.path(DATA_DIR, "taxonomy/tp-mdmg.weight-1.csv.gz")) %>%
+    dmg_local <- read_csv(file.path(DATA_DIR, "taxonomy/tp-mdmg.weight-1.csv.gz")) |>
         filter(label %in% kapk_cdata$label)
 
     list(
@@ -78,7 +78,7 @@ save_damage_thresholds <- function(thresholds) {
         damage = thresholds$damage,
         signf = thresholds$signf,
         n_reads = thresholds$n_reads
-    ) %>%
+    ) |>
         write_tsv(file.path(RESULTS_DIR, "damage/dmg_thresholds.tsv"))
 }
 
@@ -89,30 +89,30 @@ save_damage_thresholds <- function(thresholds) {
 #' @param signf Significance threshold
 #' @return list containing threshold values
 analyze_euk_damage <- function(dmg_local, tax_data, tax_info, signf) {
-    dmg_local_euk <- dmg_local %>%
-        filter(significance >= signf) %>%
-        mutate(reference = tax_id) %>%
-        inner_join(tax_data) %>%
-        inner_join(tax_info) %>%
+    dmg_local_euk <- dmg_local |>
+        filter(significance >= signf) |>
+        mutate(reference = tax_id) |>
+        inner_join(tax_data) |>
+        inner_join(tax_info) |>
         filter(domain == "d__Eukaryota")
 
     # Calculate damage statistics
-    dmg_local_euk_stats <- dmg_local_euk %>%
-        pull(damage) %>%
+    dmg_local_euk_stats <- dmg_local_euk |>
+        pull(damage) |>
         lsum(l = 8)
 
-    dmg_threshold <- dmg_local_euk_stats %>%
-        filter(letter == "C") %>%
+    dmg_threshold <- dmg_local_euk_stats |>
+        filter(letter == "C") |>
         pull(lower)
 
     # Calculate read number statistics
-    dmg_local_euk_nreads <- dmg_local_euk %>%
-        filter(damage >= dmg_threshold) %>%
-        pull(n_reads) %>%
+    dmg_local_euk_nreads <- dmg_local_euk |>
+        filter(damage >= dmg_threshold) |>
+        pull(n_reads) |>
         lsum(l = 8)
 
-    nreads_threshold <- dmg_local_euk_nreads %>%
-        filter(letter == "Z") %>%
+    nreads_threshold <- dmg_local_euk_nreads |>
+        filter(letter == "Z") |>
         pull(lower)
 
     # Create thresholds object
@@ -140,13 +140,13 @@ analyze_euk_damage <- function(dmg_local, tax_data, tax_info, signf) {
 #' @param thresholds Threshold values
 #' @return ggplot object
 plot_reads_distribution <- function(dmg_local, tax_info, tax_data, thresholds) {
-    dmg_local %>%
-        filter(significance >= thresholds$signf) %>%
-        select(label, tax_id) %>%
-        rename(reference = tax_id) %>%
-        inner_join(tax_info) %>%
-        inner_join(tax_data) %>%
-        mutate(domain = fct_relevel(domain, rev(DOMAINS))) %>%
+    dmg_local |>
+        filter(significance >= thresholds$signf) |>
+        select(label, tax_id) |>
+        rename(reference = tax_id) |>
+        inner_join(tax_info) |>
+        inner_join(tax_data) |>
+        mutate(domain = fct_relevel(domain, rev(DOMAINS))) |>
         ggplot(aes(x = domain, y = n_reads)) +
         geom_lv(aes(fill = after_stat(LV)),
             size = 0.5,
@@ -179,16 +179,16 @@ plot_reads_distribution <- function(dmg_local, tax_info, tax_data, thresholds) {
 #' @param thresholds Threshold values
 #' @return ggplot object
 plot_damage_distribution <- function(dmg_local, tax_info, tax_data, thresholds) {
-    dmg_local %>%
-        select(label, tax_id, damage, significance) %>%
-        rename(reference = tax_id) %>%
-        inner_join(tax_info) %>%
-        inner_join(tax_data) %>%
+    dmg_local |>
+        select(label, tax_id, damage, significance) |>
+        rename(reference = tax_id) |>
+        inner_join(tax_info) |>
+        inner_join(tax_data) |>
         filter(
             significance >= thresholds$signf,
             n_reads >= thresholds$n_reads
-        ) %>%
-        mutate(domain = fct_relevel(domain, rev(DOMAINS))) %>%
+        ) |>
+        mutate(domain = fct_relevel(domain, rev(DOMAINS))) |>
         ggplot(aes(x = domain, y = damage)) +
         geom_lv(aes(fill = after_stat(LV)),
             size = 0.5,
@@ -219,9 +219,9 @@ plot_damage_distribution <- function(dmg_local, tax_info, tax_data, thresholds) 
 #' @param thresholds Threshold values
 #' @return Filtered damage data
 process_damage_data <- function(dmg_local, tax_data, thresholds) {
-    dmg_local %>%
-        mutate(reference = tax_id) %>%
-        inner_join(tax_data) %>%
+    dmg_local |>
+        mutate(reference = tax_id) |>
+        inner_join(tax_data) |>
         mutate(
             is_dmg = ifelse(
                 (significance >= thresholds$signf &
@@ -238,19 +238,19 @@ process_damage_data <- function(dmg_local, tax_data, thresholds) {
 #' @param tax_info Taxonomy information
 #' @return ggplot object
 plot_reference_counts <- function(dmg_data, tax_info) {
-    dmg_data %>%
-        inner_join(tax_info) %>%
-        filter(domain != "d__Eukaryota") %>%
-        select(label = figure_names, reference, site_rnk, member_unit, is_dmg) %>%
-        distinct() %>%
-        group_by(label, site_rnk, member_unit, is_dmg) %>%
-        count(sort = TRUE) %>%
-        ungroup() %>%
-        arrange(desc(n)) %>%
+    dmg_data |>
+        inner_join(tax_info) |>
+        filter(domain != "d__Eukaryota") |>
+        select(label = figure_names, reference, site_rnk, member_unit, is_dmg) |>
+        distinct() |>
+        group_by(label, site_rnk, member_unit, is_dmg) |>
+        count(sort = TRUE) |>
+        ungroup() |>
+        arrange(desc(n)) |>
         mutate(
             label = fct_reorder(label, site_rnk),
             member_unit = fct_relevel(member_unit, c("B3", "B2", "B1"))
-        ) %>%
+        ) |>
         ggplot(aes(label, n, fill = is_dmg)) +
         geom_col(position = position_dodge()) +
         facet_grid(~member_unit, space = "free", scales = "free_x") +
@@ -271,9 +271,9 @@ plot_reference_counts <- function(dmg_data, tax_info) {
 #' @param tax_info Taxonomy information
 #' @return data frame with calculated proportions
 calculate_taxonomic_proportions <- function(dmg_data, tax_info) {
-    dmg_data %>%
-        inner_join(tax_info) %>%
-        filter(domain != "d__Eukaryota") %>%
+    dmg_data |>
+        inner_join(tax_info) |>
+        filter(domain != "d__Eukaryota") |>
         select(
             label = figure_names,
             member_unit,
@@ -282,15 +282,15 @@ calculate_taxonomic_proportions <- function(dmg_data, tax_info) {
             site_rnk,
             domain,
             species
-        ) %>%
-        group_by(label, member_unit, is_dmg, site_rnk, domain, species) %>%
+        ) |>
+        group_by(label, member_unit, is_dmg, site_rnk, domain, species) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance)),
             .groups = "drop"
-        ) %>%
-        group_by(label, member_unit) %>%
-        mutate(abundance = abundance / sum(abundance)) %>%
-        ungroup() %>%
+        ) |>
+        group_by(label, member_unit) |>
+        mutate(abundance = abundance / sum(abundance)) |>
+        ungroup() |>
         mutate(
             label = fct_reorder(label, site_rnk),
             member_unit = fct_relevel(member_unit, c("B3", "B2", "B1")),
@@ -303,10 +303,10 @@ calculate_taxonomic_proportions <- function(dmg_data, tax_info) {
 #' @param tax_props Calculated taxonomic proportions
 #' @return ggplot object
 plot_taxonomic_proportions <- function(tax_props) {
-    tax_props %>%
+    tax_props |>
         # Ensure domain is present and grouped correctly
-        group_by(label, member_unit, is_dmg, site_rnk, domain) %>%
-        summarise(abundance = sum(abundance), .groups = "drop") %>%
+        group_by(label, member_unit, is_dmg, site_rnk, domain) |>
+        summarise(abundance = sum(abundance), .groups = "drop") |>
         ggplot(aes(x = label, y = abundance, fill = domain)) +
         geom_col(position = "stack", color = "black", linewidth = 0.3, width = 1) +
         geom_hline(yintercept = 0.5, linetype = 2) +
@@ -340,9 +340,9 @@ plot_taxonomic_proportions <- function(tax_props) {
 process_species_level <- function(tax_data_filt, dmg_local_filt, tax_info,
                                   kapk_cdata, thresholds) {
     # Aggregate taxonomy data at species level
-    tax_data_filt_sp <- tax_data_filt %>%
-        inner_join(tax_info) %>%
-        group_by(label, species, domain) %>%
+    tax_data_filt_sp <- tax_data_filt |>
+        inner_join(tax_info) |>
+        group_by(label, species, domain) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance)),
             read_ani_mean = mean(read_ani_mean),
@@ -350,9 +350,9 @@ process_species_level <- function(tax_data_filt, dmg_local_filt, tax_info,
             breadth = mean(breadth),
             coverage_mean = mean(coverage_mean),
             .groups = "drop"
-        ) %>%
-        inner_join(kapk_cdata %>% select(label, figure_names)) %>%
-        select(-label) %>%
+        ) |>
+        inner_join(kapk_cdata |> select(label, figure_names)) |>
+        select(-label) |>
         rename(label = figure_names)
 
     write_tsv(
@@ -361,17 +361,17 @@ process_species_level <- function(tax_data_filt, dmg_local_filt, tax_info,
     )
 
     # Aggregate damage data at species level
-    dmg_local_filt_sp <- dmg_local_filt %>%
-        rename(reference = tax_id) %>%
-        inner_join(tax_data_filt %>% select(reference, label, n_reads)) %>%
-        inner_join(tax_info) %>%
-        group_by(label, species, domain) %>%
+    dmg_local_filt_sp <- dmg_local_filt |>
+        rename(reference = tax_id) |>
+        inner_join(tax_data_filt |> select(reference, label, n_reads)) |>
+        inner_join(tax_info) |>
+        group_by(label, species, domain) |>
         summarise(
             damage = mean(damage),
             n_reads_agg = janitor::round_half_up(mean(n_reads)),
             significance = mean(significance),
             .groups = "drop"
-        ) %>%
+        ) |>
         mutate(
             is_dmg = if_else(
                 damage >= thresholds$damage &
@@ -380,9 +380,9 @@ process_species_level <- function(tax_data_filt, dmg_local_filt, tax_info,
                 "Damaged",
                 "Non-damaged"
             )
-        ) %>%
-        inner_join(kapk_cdata %>% select(label, figure_names)) %>%
-        select(-label) %>%
+        ) |>
+        inner_join(kapk_cdata |> select(label, figure_names)) |>
+        select(-label) |>
         rename(label = figure_names)
 
     write_csv(
@@ -399,9 +399,9 @@ process_species_level <- function(tax_data_filt, dmg_local_filt, tax_info,
 #' @return Filtered data list
 save_filtered_results <- function(tax_data, dmg_local, tax_proportions, kapk_cdata) {
     # Identify samples to keep
-    samples_to_keep <- tax_proportions %>%
-        group_by(label, is_dmg) %>%
-        summarise(abundance = sum(abundance), .groups = "drop") %>%
+    samples_to_keep <- tax_proportions |>
+        group_by(label, is_dmg) |>
+        summarise(abundance = sum(abundance), .groups = "drop") |>
         filter(abundance >= 0.5, is_dmg == "Damaged")
 
     write_tsv(
@@ -410,11 +410,11 @@ save_filtered_results <- function(tax_data, dmg_local, tax_proportions, kapk_cda
     )
 
     # Get labels to keep
-    labels_to_keep <- kapk_cdata %>%
+    labels_to_keep <- kapk_cdata |>
         filter(figure_names %in% samples_to_keep$label)
 
     # Filter and save taxonomy data
-    tax_data_filt <- tax_data %>%
+    tax_data_filt <- tax_data |>
         filter(label %in% labels_to_keep$label)
     write_tsv(
         tax_data_filt,
@@ -422,7 +422,7 @@ save_filtered_results <- function(tax_data, dmg_local, tax_proportions, kapk_cda
     )
 
     # Filter and save damage data
-    dmg_local_filt <- dmg_local %>%
+    dmg_local_filt <- dmg_local |>
         filter(label %in% labels_to_keep$label)
     write_csv(
         dmg_local_filt,

@@ -22,15 +22,15 @@ clean_vec <- function(x, refactor = FALSE) {
     x_is_factor <- is.factor(x)
     old_names <- as.character(x)
 
-    new_names <- old_names %>%
-        gsub("'", "", .) %>%
-        gsub("\"", "", .) %>%
-        gsub("%", "percent", .) %>%
-        gsub("^[ ]+", "", .) %>%
-        make.names(.) %>%
-        gsub("[.]+", "_", .) %>%
-        gsub("[_]+", "_", .) %>%
-        tolower(.) %>%
+    new_names <- old_names |>
+        gsub("'", "", .) |>
+        gsub("\"", "", .) |>
+        gsub("%", "percent", .) |>
+        gsub("^[ ]+", "", .) |>
+        make.names(.) |>
+        gsub("[.]+", "_", .) |>
+        gsub("[_]+", "_", .) |>
+        tolower(.) |>
         gsub("_$", "", .)
 
     if (x_is_factor && refactor) factor(new_names) else new_names
@@ -60,8 +60,8 @@ load_data <- function() {
     # Load taxonomic data
     gem_tax_info <- read_tsv("./data/cdata/GEM-20220926-tax-gtdbtk-complete.tsv",
         show_col_types = FALSE
-    ) %>%
-        select(reference = accession, tax_string = taxon) %>%
+    ) |>
+        select(reference = accession, tax_string = taxon) |>
         separate(
             col = tax_string,
             sep = ";",
@@ -74,8 +74,8 @@ load_data <- function() {
 
     tg2g_tax_info <- read_tsv("./data/cdata/tg2g-20220926-tax-gtdbtk-complete.tsv",
         show_col_types = FALSE
-    ) %>%
-        select(reference = accession, tax_string = taxon) %>%
+    ) |>
+        select(reference = accession, tax_string = taxon) |>
         separate(
             col = tax_string,
             sep = ";",
@@ -91,14 +91,14 @@ load_data <- function() {
     # Load GEM metadata
     gem_metadata <- read_tsv("./data/cdata/GEM-20220926_genome-metadata.tsv",
         show_col_types = FALSE
-    ) %>%
+    ) |>
         select(reference = genome_id, habitat)
 
     # Load Woodcroft data
     woodcroft_tax_info <- read_tsv("./data/cdata/woodcroft2018-tax-gtdbtk-complete.tsv",
         show_col_types = FALSE
-    ) %>%
-        select(reference = accession, tax_string = taxon) %>%
+    ) |>
+        select(reference = accession, tax_string = taxon) |>
         separate(
             col = tax_string,
             sep = ";",
@@ -134,45 +134,45 @@ process_mag_data <- function(data) {
     # Load and process mapping data
     mg_mapping <- read_tsv("./data/mag-distribution/GEM-20220926__tg2g-20220926-tp-mapping-filtered.summary.tsv.gz",
         show_col_types = FALSE
-    ) %>%
-        filter(breadth >= 0.01) %>%
+    ) |>
+        filter(breadth >= 0.01) |>
         mutate(abundance = ifelse(tax_abund_tad == 0, tax_abund_read, tax_abund_tad))
 
     # Process metadata
-    mg_metadata <- mg_mapping %>%
-        select(reference) %>%
-        distinct() %>%
-        filter(!reference %in% data$gem_tax_info$reference) %>%
-        mutate(habitat = "Glacier") %>%
+    mg_metadata <- mg_mapping |>
+        select(reference) |>
+        distinct() |>
+        filter(!reference %in% data$gem_tax_info$reference) |>
+        mutate(habitat = "Glacier") |>
         bind_rows(data$gem_metadata)
 
     # Load damage data
     mg_dmg <- read_csv("./data/mag-distribution/GEM-20220926__tg2g-20220926-tp-mdmg.weight-1.csv.gz",
         show_col_types = FALSE
-    ) %>%
-        filter(label %in% data$kapk_cdata$label) %>%
-        select(label, reference = tax_id, damage, significance) %>%
+    ) |>
+        filter(label %in% data$kapk_cdata$label) |>
+        select(label, reference = tax_id, damage, significance) |>
         filter(
             significance > data$dmg_thresholds$signf,
             damage >= data$dmg_thresholds$damage
         )
 
     # Process species-level data
-    mg_mapping_filt_sp <- mg_mapping %>%
-        filter(breadth >= 0.01, n_reads >= data$dmg_thresholds$n_reads) %>%
-        inner_join(mg_dmg) %>%
-        inner_join(data$kapk_cdata %>% select(label, figure_names)) %>%
-        inner_join(data$mg_tax_info) %>%
-        inner_join(mg_metadata) %>%
-        group_by(figure_names, domain, species, habitat) %>%
+    mg_mapping_filt_sp <- mg_mapping |>
+        filter(breadth >= 0.01, n_reads >= data$dmg_thresholds$n_reads) |>
+        inner_join(mg_dmg) |>
+        inner_join(data$kapk_cdata |> select(label, figure_names)) |>
+        inner_join(data$mg_tax_info) |>
+        inner_join(mg_metadata) |>
+        group_by(figure_names, domain, species, habitat) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance)),
             damage = mean(damage),
             read_ani_mean = mean(read_ani_mean),
             breadth = mean(breadth)
-        ) %>%
-        ungroup() %>%
-        rename(label = figure_names) %>%
+        ) |>
+        ungroup() |>
+        rename(label = figure_names) |>
         filter(label %in% data$label_nobloom$label)
 
     mg_mapping_filt_sp
@@ -185,43 +185,43 @@ process_woodcroft_data <- function(data) {
     # Load and process mapping data
     woodcroft_mapping <- read_tsv("./data/mag-distribution/woodcroft2018-tp-mapping-filtered.summary.tsv.gz",
         show_col_types = FALSE
-    ) %>%
-        filter(breadth >= 0.01) %>%
-        mutate(abundance = ifelse(tax_abund_tad == 0, tax_abund_read, tax_abund_tad)) %>%
-        inner_join(data$woodcroft_tax_info) %>%
-        separate(reference, c("acc", "sample"), sep = ".1_", remove = FALSE) %>%
-        select(-acc) %>%
-        inner_join(data$woodcroft_metadata %>% select(sample, habitat))
+    ) |>
+        filter(breadth >= 0.01) |>
+        mutate(abundance = ifelse(tax_abund_tad == 0, tax_abund_read, tax_abund_tad)) |>
+        inner_join(data$woodcroft_tax_info) |>
+        separate(reference, c("acc", "sample"), sep = ".1_", remove = FALSE) |>
+        select(-acc) |>
+        inner_join(data$woodcroft_metadata |> select(sample, habitat))
 
     # Load damage data
     woodcroft_dmg <- read_csv("./data/mag-distribution/woodcroft2018-tp-mdmg.weight-1.csv.gz",
         show_col_types = FALSE
-    ) %>%
-        filter(label %in% data$kapk_cdata$label) %>%
-        select(label, reference = tax_id, damage, significance) %>%
+    ) |>
+        filter(label %in% data$kapk_cdata$label) |>
+        select(label, reference = tax_id, damage, significance) |>
         filter(
             significance > data$dmg_thresholds$signf,
             damage >= data$dmg_thresholds$damage
         )
 
     # Process final data
-    woodcroft_mapping_filt_sp <- woodcroft_mapping %>%
-        filter(breadth >= 0.01, n_reads >= data$dmg_thresholds$n_reads) %>%
-        inner_join(woodcroft_dmg) %>%
-        inner_join(data$kapk_cdata) %>%
-        select(-reference) %>%
+    woodcroft_mapping_filt_sp <- woodcroft_mapping |>
+        filter(breadth >= 0.01, n_reads >= data$dmg_thresholds$n_reads) |>
+        inner_join(woodcroft_dmg) |>
+        inner_join(data$kapk_cdata) |>
+        select(-reference) |>
         group_by(
             figure_names, domain, lineage, kingdom, phylum, class,
             order, family, genus, species, habitat
-        ) %>%
+        ) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance)),
             damage = mean(damage),
             read_ani_mean = mean(read_ani_mean),
             breadth = mean(breadth)
-        ) %>%
-        ungroup() %>%
-        rename(label = figure_names) %>%
+        ) |>
+        ungroup() |>
+        rename(label = figure_names) |>
         filter(label %in% data$label_nobloom$label)
 
     woodcroft_mapping_filt_sp
@@ -233,29 +233,29 @@ process_woodcroft_data <- function(data) {
 #' @return list containing plot data and top habitats
 process_habitat_metrics_data <- function(mag_data, kapk_cdata_agg) {
     # Get top habitats
-    top_habitats <- mag_data %>%
-        mutate(habitat = clean_vec(habitat)) %>%
-        filter(breadth > 0.5) %>%
-        group_by(habitat) %>%
+    top_habitats <- mag_data |>
+        mutate(habitat = clean_vec(habitat)) |>
+        filter(breadth > 0.5) |>
+        group_by(habitat) |>
         summarise(
             max_breadth = max(breadth),
             n = n()
-        ) %>%
-        filter(n > 1) %>%
-        arrange(-n) %>%
-        head(5) %>%
+        ) |>
+        filter(n > 1) |>
+        arrange(-n) |>
+        head(5) |>
         mutate(rnk = row_number())
 
     # Process plot data
-    plot_data <- mag_data %>%
-        inner_join(kapk_cdata_agg) %>%
+    plot_data <- mag_data |>
+        inner_join(kapk_cdata_agg) |>
         select(
             label, domain, species, damage, breadth, abundance,
             member_unit, read_ani_mean, habitat
-        ) %>%
-        group_by(label) %>%
-        mutate(prop = abundance / sum(abundance)) %>%
-        ungroup() %>%
+        ) |>
+        group_by(label) |>
+        mutate(prop = abundance / sum(abundance)) |>
+        ungroup() |>
         mutate(
             habitat = clean_vec(habitat),
             habitat = ifelse(habitat %in% top_habitats$habitat, habitat, "Other")
@@ -272,19 +272,19 @@ process_habitat_metrics_data <- function(mag_data, kapk_cdata_agg) {
 #' @param top_habitats Top habitats data
 #' @return ggplot object
 plot_habitat_metrics <- function(data, top_habitats) {
-    data %>%
+    data |>
         select(species, domain, damage,
             Detection = breadth,
             prop, habitat, ANI = read_ani_mean
-        ) %>%
-        mutate(ANI = ANI / 100) %>%
+        ) |>
+        mutate(ANI = ANI / 100) |>
         pivot_longer(
             cols = c(ANI, Detection),
             names_to = "metric",
             values_to = "value"
-        ) %>%
-        filter(habitat != "Other") %>%
-        mutate(habitat = fct_relevel(habitat, top_habitats$habitat)) %>%
+        ) |>
+        filter(habitat != "Other") |>
+        mutate(habitat = fct_relevel(habitat, top_habitats$habitat)) |>
         ggplot(aes(x = damage, y = value, fill = domain)) +
         geom_hdr() +
         geom_point(shape = 21, color = "black", alpha = 0.8) +
@@ -312,9 +312,9 @@ plot_habitat_metrics <- function(data, top_habitats) {
 #' @param kapk_cdata_agg Aggregated metadata
 #' @return ggplot object
 plot_woodcroft <- function(data, kapk_cdata_agg) {
-    data %>%
-        inner_join(kapk_cdata_agg) %>%
-        group_by(label) %>%
+    data |>
+        inner_join(kapk_cdata_agg) |>
+        group_by(label) |>
         mutate(
             total = sum(abundance),
             habitat = case_when(
@@ -322,14 +322,14 @@ plot_woodcroft <- function(data, kapk_cdata_agg) {
                 habitat == "palsa" ~ "Palsa",
                 habitat == "bog" ~ "Bog"
             )
-        ) %>%
-        ungroup() %>%
+        ) |>
+        ungroup() |>
         mutate(
             perc = abundance / total,
             member_unit = fct_relevel(member_unit, c("B3", "B2", "B1")),
             habitat = fct_relevel(habitat, rev(c("Palsa", "Bog", "Fen"))),
             label = fct_reorder(label, -site_rnk)
-        ) %>%
+        ) |>
         ggplot(aes(y = damage, x = perc, fill = domain)) +
         geom_hdr() +
         geom_point(shape = 21, color = "black", alpha = 0.8) +

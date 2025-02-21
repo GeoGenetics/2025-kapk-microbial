@@ -36,7 +36,7 @@ load_initial_data <- function() {
     # Load taxonomic annotations
     tax_info <- read_tsv("./data/taxonomy/hires-organelles-viruses-arctic.tax.tsv",
         col_names = c("reference", "tax_string")
-    ) %>%
+    ) |>
         separate(
             col = tax_string,
             sep = ";",
@@ -63,31 +63,31 @@ load_initial_data <- function() {
     dmg_local <- read_csv("./results/damage/tp-mdmg.weight-1.local.10M.nobloom.csv.gz")
 
     # Load and process derep stats
-    derep_stats <- read_tsv("./data/stats/all.stats-derep-summary.tsv.gz") %>%
-        inner_join(kapk_cdata) %>%
-        select(label = figure_names, member_unit, num_seqs, site_rnk, avg_len) %>%
-        group_by(label, member_unit, site_rnk) %>%
+    derep_stats <- read_tsv("./data/stats/all.stats-derep-summary.tsv.gz") |>
+        inner_join(kapk_cdata) |>
+        select(label = figure_names, member_unit, num_seqs, site_rnk, avg_len) |>
+        group_by(label, member_unit, site_rnk) |>
         summarise(
             num_seqs = janitor::round_half_up(mean(num_seqs)),
             avg_len = mean(avg_len)
-        ) %>%
-        ungroup() %>%
-        mutate(step = "derep") %>%
-        filter(label %in% (tax_data_agg %>% distinct() %>% pull(label)))
+        ) |>
+        ungroup() |>
+        mutate(step = "derep") |>
+        filter(label %in% (tax_data_agg |> distinct() |> pull(label)))
 
     # Load and process mapped reads data
     label_to_file <- read_tsv("./data/cdata/KapK-label-to-file-20221211.tsv")
     reads_mapped <- read_tsv("./data/cdata/all.tp-classified-reads.tsv",
         col_names = c("file", "reads_mapped")
-    ) %>%
-        inner_join(label_to_file) %>%
-        inner_join(kapk_cdata %>% select(label, figure_names)) %>%
-        select(-label, -file) %>%
+    ) |>
+        inner_join(label_to_file) |>
+        inner_join(kapk_cdata |> select(label, figure_names)) |>
+        select(-label, -file) |>
         rename(label = figure_names)
 
     # Process derep stats with mapped reads
-    derep_stats <- derep_stats %>%
-        inner_join(reads_mapped) %>%
+    derep_stats <- derep_stats |>
+        inner_join(reads_mapped) |>
         mutate(
             prop_mapped = (reads_mapped / num_seqs),
             not_mapped = num_seqs - reads_mapped
@@ -112,41 +112,41 @@ load_initial_data <- function() {
 #' @return list containing processed taxonomic data
 process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_cdata_agg) {
     # Combine taxonomy and damage data
-    tax_data_agg <- tax_data_agg %>%
+    tax_data_agg <- tax_data_agg |>
         inner_join(dmg_local_agg)
 
     # Process viruses data
-    tax_data_agg_viruses <- tax_data_agg %>%
-        inner_join(tax_info) %>%
+    tax_data_agg_viruses <- tax_data_agg |>
+        inner_join(tax_info) |>
         filter(domain == "d__Viruses")
 
     # Process species-level data
-    tax_data_agg_dmg_sp <- tax_data_agg %>%
-        inner_join(tax_info) %>%
-        filter(domain != "d__Eukaryota") %>%
+    tax_data_agg_dmg_sp <- tax_data_agg |>
+        inner_join(tax_info) |>
+        filter(domain != "d__Eukaryota") |>
         select(
             label = figure_names,
             member_unit, is_dmg, abundance,
             site_rnk, domain, species,
             damage, read_ani_mean, breadth
-        ) %>%
-        group_by(label, member_unit, is_dmg, site_rnk, domain, species) %>%
+        ) |>
+        group_by(label, member_unit, is_dmg, site_rnk, domain, species) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance)),
             breadth = mean(breadth),
             damage = mean(damage),
             read_ani_mean = mean(read_ani_mean)
-        ) %>%
+        ) |>
         ungroup()
 
     # Get short label order
-    short_label_order <- kapk_cdata_agg %>%
-        filter(label %in% (tax_data_agg_dmg_sp %>% distinct() %>% pull(label))) %>%
-        mutate(label = fct_reorder(label, -site_rnk)) %>%
-        pull(label) %>%
-        levels() %>%
-        enframe(value = "label") %>%
-        inner_join(kapk_cdata_agg %>% select(label, short_label)) %>%
+    short_label_order <- kapk_cdata_agg |>
+        filter(label %in% (tax_data_agg_dmg_sp |> distinct() |> pull(label))) |>
+        mutate(label = fct_reorder(label, -site_rnk)) |>
+        pull(label) |>
+        levels() |>
+        enframe(value = "label") |>
+        inner_join(kapk_cdata_agg |> select(label, short_label)) |>
         pull(short_label)
 
     list(
@@ -163,44 +163,44 @@ process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_c
 #' @return list containing processed taxonomic data
 process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_cdata_agg) {
     # Combine taxonomy and damage data
-    tax_data_agg <- tax_data_agg %>%
+    tax_data_agg <- tax_data_agg |>
         inner_join(dmg_local_agg)
 
     # Process viruses data
-    tax_data_agg_viruses <- tax_data_agg %>%
-        inner_join(tax_info) %>%
+    tax_data_agg_viruses <- tax_data_agg |>
+        inner_join(tax_info) |>
         filter(domain == "d__Viruses")
 
     # Process species-level data
-    tax_data_agg_dmg_sp <- tax_data_agg %>%
-        inner_join(tax_info) %>%
-        filter(domain != "d__Eukaryota") %>%
-        inner_join(kapk_cdata_agg) %>%
+    tax_data_agg_dmg_sp <- tax_data_agg |>
+        inner_join(tax_info) |>
+        filter(domain != "d__Eukaryota") |>
+        inner_join(kapk_cdata_agg) |>
         select(
             label, short_label, domain, lineage, kingdom, phylum, class, order,
             family, genus, species, site, member_unit, site_rnk, abundance, is_dmg,
             damage, read_ani_mean, breadth
-        ) %>%
+        ) |>
         group_by(
             label, short_label, domain, lineage, kingdom, phylum, class, order,
             family, genus, species, site, member_unit, site_rnk, is_dmg
-        ) %>%
+        ) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance)),
             damage = mean(damage),
             read_ani_mean = mean(read_ani_mean),
             breadth = mean(breadth)
-        ) %>%
+        ) |>
         ungroup()
 
     # Get short label order
-    short_label_order <- kapk_cdata_agg %>%
-        filter(label %in% (tax_data_agg_dmg_sp %>% distinct() %>% pull(label))) %>%
-        mutate(label = fct_reorder(label, -site_rnk)) %>%
-        pull(label) %>%
-        levels() %>%
-        enframe(value = "label") %>%
-        inner_join(kapk_cdata_agg %>% select(label, short_label)) %>%
+    short_label_order <- kapk_cdata_agg |>
+        filter(label %in% (tax_data_agg_dmg_sp |> distinct() |> pull(label))) |>
+        mutate(label = fct_reorder(label, -site_rnk)) |>
+        pull(label) |>
+        levels() |>
+        enframe(value = "label") |>
+        inner_join(kapk_cdata_agg |> select(label, short_label)) |>
         pull(short_label)
 
     list(
@@ -217,34 +217,34 @@ process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_c
 #' @return list containing genus-level data
 process_genus_level_data <- function(tax_data_agg_dmg_sp, abun_thresh = ABUNDANCE_THRESHOLD) {
     # Process family level data
-    tax_data_agg_family <- tax_data_agg_dmg_sp %>%
-        filter(domain %in% c("d__Archaea", "d__Bacteria")) %>%
-        select(label, domain, phylum, class, order, family, abundance, is_dmg) %>%
-        group_by(label, domain, phylum, class, order, family, is_dmg) %>%
-        summarise(abundance = sum(abundance)) %>%
-        ungroup() %>%
-        group_by(label) %>%
-        mutate(total_abundance = sum(abundance)) %>%
-        ungroup() %>%
+    tax_data_agg_family <- tax_data_agg_dmg_sp |>
+        filter(domain %in% c("d__Archaea", "d__Bacteria")) |>
+        select(label, domain, phylum, class, order, family, abundance, is_dmg) |>
+        group_by(label, domain, phylum, class, order, family, is_dmg) |>
+        summarise(abundance = sum(abundance)) |>
+        ungroup() |>
+        group_by(label) |>
+        mutate(total_abundance = sum(abundance)) |>
+        ungroup() |>
         mutate(abundance = abundance / total_abundance)
 
     # Get damaged families
-    dmg_family <- tax_data_agg_family %>%
-        filter(abundance > abun_thresh, is_dmg == "Damaged") %>%
-        select(domain, phylum, class, order, family) %>%
+    dmg_family <- tax_data_agg_family |>
+        filter(abundance > abun_thresh, is_dmg == "Damaged") |>
+        select(domain, phylum, class, order, family) |>
         distinct()
 
     # Process genus level for damaged families
-    tax_data_agg_dmg_genus <- tax_data_agg_dmg_sp %>%
-        filter(domain %in% c("d__Archaea", "d__Bacteria")) %>%
-        select(label, domain, phylum, class, order, family, genus, abundance, is_dmg) %>%
-        group_by(label, domain, phylum, class, order, family, genus, is_dmg) %>%
-        summarise(abundance = sum(abundance)) %>%
-        ungroup() %>%
-        group_by(label) %>%
-        mutate(total_abundance = sum(abundance)) %>%
-        ungroup() %>%
-        mutate(abundance = abundance / total_abundance) %>%
+    tax_data_agg_dmg_genus <- tax_data_agg_dmg_sp |>
+        filter(domain %in% c("d__Archaea", "d__Bacteria")) |>
+        select(label, domain, phylum, class, order, family, genus, abundance, is_dmg) |>
+        group_by(label, domain, phylum, class, order, family, genus, is_dmg) |>
+        summarise(abundance = sum(abundance)) |>
+        ungroup() |>
+        group_by(label) |>
+        mutate(total_abundance = sum(abundance)) |>
+        ungroup() |>
+        mutate(abundance = abundance / total_abundance) |>
         filter(family %in% dmg_family$family, is_dmg == "Damaged")
 
     list(
@@ -284,44 +284,44 @@ process_tree_data <- function(dmg_genus, tree_path, output_path) {
 #' @return phyloseq object
 create_phyloseq_object <- function(tax_data_agg, tax_info, kapk_cdata_agg) {
     # Filter damaged taxa
-    tax_filt <- tax_data_agg %>%
-        filter(is_dmg == "Damaged") %>%
+    tax_filt <- tax_data_agg |>
+        filter(is_dmg == "Damaged") |>
         inner_join(tax_info)
 
     # Process bacteria and archaea data
-    tax_filt_ba <- tax_filt %>%
-        filter(domain %in% c("d__Bacteria", "d__Archaea")) %>%
-        group_by(label, species) %>%
+    tax_filt_ba <- tax_filt |>
+        filter(domain %in% c("d__Bacteria", "d__Archaea")) |>
+        group_by(label, species) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance))
-        ) %>%
+        ) |>
         ungroup()
 
     # Create OTU table
-    tax_df <- tax_filt_ba %>%
-        select(species, label, abundance) %>%
+    tax_df <- tax_filt_ba |>
+        select(species, label, abundance) |>
         pivot_wider(
             names_from = "label",
             values_from = abundance,
             values_fill = 0
-        ) %>%
-        as.data.frame() %>%
+        ) |>
+        as.data.frame() |>
         column_to_rownames("species")
 
     # Create sample data
-    kapk_cdata_df <- kapk_cdata_agg %>%
-        mutate(label_cl = label) %>%
-        as.data.frame() %>%
+    kapk_cdata_df <- kapk_cdata_agg |>
+        mutate(label_cl = label) |>
+        as.data.frame() |>
         column_to_rownames("label_cl")
 
     # Create taxonomy table
-    taxonomy_df <- tax_info %>%
-        filter(domain %in% c("d__Bacteria", "d__Archaea")) %>%
-        select(species, domain, phylum, class, order, family, genus) %>%
-        distinct() %>%
-        mutate(reference = species) %>%
-        distinct() %>%
-        as.data.frame() %>%
+    taxonomy_df <- tax_info |>
+        filter(domain %in% c("d__Bacteria", "d__Archaea")) |>
+        select(species, domain, phylum, class, order, family, genus) |>
+        distinct() |>
+        mutate(reference = species) |>
+        distinct() |>
+        as.data.frame() |>
         column_to_rownames("reference")
 
     # Create phyloseq object
@@ -338,16 +338,16 @@ create_phyloseq_object <- function(tax_data_agg, tax_info, kapk_cdata_agg) {
 #' @param short_label_order Order of short labels
 #' @return ggplot object
 plot_reference_counts <- function(tax_data_agg, kapk_cdata_agg, short_label_order) {
-    tax_data_agg %>%
-        select(label, reference, is_dmg) %>%
-        group_by(label, is_dmg) %>%
-        count() %>%
-        ungroup() %>%
-        inner_join(kapk_cdata_agg) %>%
+    tax_data_agg |>
+        select(label, reference, is_dmg) |>
+        group_by(label, is_dmg) |>
+        count() |>
+        ungroup() |>
+        inner_join(kapk_cdata_agg) |>
         mutate(
             short_label = fct_relevel(short_label, short_label_order),
             member_unit = fct_relevel(member_unit, c("B3", "B2", "B1"))
-        ) %>%
+        ) |>
         ggplot(aes(x = short_label, y = n)) +
         geom_col(color = "black", linewidth = 0.3, width = 1) +
         theme_bw() +
@@ -373,14 +373,14 @@ plot_reference_counts <- function(tax_data_agg, kapk_cdata_agg, short_label_orde
 #' @param short_label_order Order of short labels
 #' @return ggplot object
 plot_derep_seqs <- function(derep_stats, kapk_cdata_agg, short_label_order) {
-    derep_stats %>%
-        inner_join(kapk_cdata_agg %>% select(label, short_label)) %>%
-        select(label, short_label, member_unit, site_rnk, num_seqs, step) %>%
+    derep_stats |>
+        inner_join(kapk_cdata_agg |> select(label, short_label)) |>
+        select(label, short_label, member_unit, site_rnk, num_seqs, step) |>
         mutate(
             label = fct_reorder(label, -site_rnk),
             member_unit = fct_relevel(member_unit, c("B3", "B2", "B1")),
             short_label = fct_relevel(short_label, short_label_order)
-        ) %>%
+        ) |>
         ggplot(aes(label, num_seqs)) +
         geom_col(
             color = "black", linewidth = 0.3, width = 1,
@@ -412,14 +412,14 @@ plot_derep_seqs <- function(derep_stats, kapk_cdata_agg, short_label_order) {
 #' @param short_label_order Order of short labels
 #' @return ggplot object
 plot_mapped_proportions <- function(derep_stats, kapk_cdata_agg, short_label_order) {
-    derep_stats %>%
-        inner_join(kapk_cdata_agg %>% select(label, short_label)) %>%
-        select(label, short_label, member_unit, site_rnk, prop_mapped, step) %>%
+    derep_stats |>
+        inner_join(kapk_cdata_agg |> select(label, short_label)) |>
+        select(label, short_label, member_unit, site_rnk, prop_mapped, step) |>
         mutate(
             label = fct_reorder(label, -site_rnk),
             member_unit = fct_relevel(member_unit, c("B3", "B2", "B1")),
             short_label = fct_relevel(short_label, short_label_order)
-        ) %>%
+        ) |>
         ggplot(aes(label, prop_mapped)) +
         geom_col(
             color = "black", linewidth = 0.3, width = 1,
@@ -449,16 +449,16 @@ plot_mapped_proportions <- function(derep_stats, kapk_cdata_agg, short_label_ord
 #' @param short_label_order Order of short labels
 #' @return ggplot object
 plot_domain_proportions <- function(tax_data_agg_dmg_sp, short_label_order) {
-    tax_props <- tax_data_agg_dmg_sp %>%
-        group_by(short_label, domain, site, member_unit, site_rnk, is_dmg) %>%
-        summarise(abundance = sum(abundance)) %>%
-        ungroup() %>%
-        group_by(short_label) %>%
+    tax_props <- tax_data_agg_dmg_sp |>
+        group_by(short_label, domain, site, member_unit, site_rnk, is_dmg) |>
+        summarise(abundance = sum(abundance)) |>
+        ungroup() |>
+        group_by(short_label) |>
         mutate(
             total_abundance = sum(abundance),
             abundance = abundance / total_abundance
-        ) %>%
-        ungroup() %>%
+        ) |>
+        ungroup() |>
         mutate(
             short_label = fct_relevel(short_label, short_label_order),
             member_unit = fct_relevel(member_unit, c("B3", "B2", "B1")),
@@ -494,29 +494,29 @@ plot_domain_proportions <- function(tax_data_agg_dmg_sp, short_label_order) {
 #' @return list of ggplot objects
 create_hdr_plots <- function(tax_data_agg, tax_info, kapk_cdata_agg, dmg_thresholds) {
     # Prepare data for HDR plots
-    plot_data <- tax_data_agg %>%
-        inner_join(tax_info) %>%
-        inner_join(kapk_cdata_agg) %>%
-        filter(domain != "d__Eukaryota") %>%
-        select(label, domain, abundance, species, damage, read_ani_mean, breadth) %>%
-        group_by(label, domain, species) %>%
+    plot_data <- tax_data_agg |>
+        inner_join(tax_info) |>
+        inner_join(kapk_cdata_agg) |>
+        filter(domain != "d__Eukaryota") |>
+        select(label, domain, abundance, species, damage, read_ani_mean, breadth) |>
+        group_by(label, domain, species) |>
         summarise(
             abundance = janitor::round_half_up(gm_mean(abundance)),
             breadth = mean(breadth),
             damage = mean(damage),
             read_ani_mean = mean(read_ani_mean),
             .groups = "drop"
-        ) %>%
-        group_by(label) %>%
-        mutate(total_abundance = sum(abundance)) %>%
-        ungroup() %>%
+        ) |>
+        group_by(label) |>
+        mutate(total_abundance = sum(abundance)) |>
+        ungroup() |>
         mutate(
             abundance = abundance / total_abundance,
             domain = fct_relevel(domain, c("d__Viruses", "d__Bacteria", "d__Archaea"))
         )
 
     # Abundance HDR plot
-    hdr_abun <- plot_data %>%
+    hdr_abun <- plot_data |>
         ggplot(aes(y = abundance, x = damage)) +
         annotate("rect",
             xmin = dmg_thresholds$damage, xmax = Inf,
@@ -552,7 +552,7 @@ create_hdr_plots <- function(tax_data_agg, tax_info, kapk_cdata_agg, dmg_thresho
         )
 
     # Breadth HDR plot
-    hdr_breadth <- plot_data %>%
+    hdr_breadth <- plot_data |>
         ggplot(aes(y = breadth, x = damage)) +
         annotate("rect",
             xmin = dmg_thresholds$damage, xmax = Inf,
@@ -588,7 +588,7 @@ create_hdr_plots <- function(tax_data_agg, tax_info, kapk_cdata_agg, dmg_thresho
         scale_y_continuous(labels = scales::percent_format(accuracy = 1))
 
     # ANI HDR plot
-    hdr_ani <- plot_data %>%
+    hdr_ani <- plot_data |>
         ggplot(aes(y = read_ani_mean / 100, x = damage)) +
         annotate("rect",
             xmin = dmg_thresholds$damage, xmax = Inf,
@@ -705,17 +705,17 @@ main <- function() {
     saveRDS(ps_obj, file.path(RESULTS_DIR, "taxonomy/kapk_ps_ba_gm.rds"))
 
     # Process and save anvio data
-    tax_data_agg_dmg_genus <- genus_data$dmg_genus %>%
-        mutate(genus = gsub("g__", "", genus)) %>%
-        filter(genus %in% gtdb_tree_filt$tip.label) %>%
-        mutate(item_name = genus) %>%
-        select(item_name, label, domain, phylum, class, order, family, genus, abundance) %>%
-        mutate(abundance = 100 * abundance) %>%
+    tax_data_agg_dmg_genus <- genus_data$dmg_genus |>
+        mutate(genus = gsub("g__", "", genus)) |>
+        filter(genus %in% gtdb_tree_filt$tip.label) |>
+        mutate(item_name = genus) |>
+        select(item_name, label, domain, phylum, class, order, family, genus, abundance) |>
+        mutate(abundance = 100 * abundance) |>
         pivot_wider(
             names_from = label,
             values_from = abundance,
             values_fill = list(abundance = 0)
-        ) %>%
+        ) |>
         mutate(B1 = "B1", B2 = "B2", B3 = "B3")
 
     write_tsv(
