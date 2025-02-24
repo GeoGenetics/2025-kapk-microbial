@@ -98,8 +98,8 @@ tp_filter_nreads: 100
 tp_filter_exp_bratio: 0.75
 tp_filter_exp_bratio_dmg: 0.25
 tp_filter_cov_evenness: 0.4
-tp_filter_read_ani: ["92"]
-tp_extra: "-a 94 --read-length-freqs --read-hits-count --include-low-detection --min-breadth 0.01"
+tp_filter_read_ani: ["94"]
+tp_extra: "-a 90 --read-length-freqs --read-hits-count --include-low-detection --min-breadth 0.01"
 tp_filter_entropy: "auto"
 tp_filter_gini: "auto"
 
