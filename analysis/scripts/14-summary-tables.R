@@ -198,53 +198,70 @@ sup_table_3_s2 <- kapk_cdata_agg |>
     inner_join(woodcroft_mapping) |>
     rename(label_orig = label)
 
-# Functional data
-kegg <- read_tsv("./data/function/kegg/all/kegg-modules-summary-all-20230525.tsv.gz")
+# Sample lookup: 10-char sample folder → short_label + full label
+sample_meta_dart <- kapk_cdata |>
+    filter(figure_names %in% samples_to_keep$label) |>
+    mutate(
+        sample      = substr(label, 1, 10),
+        short_label = paste(site, sub(".*-", "", figure_names), sep = "_")
+    ) |>
+    select(sample, short_label, label)
 
-sup_table_5_s1 <- kapk_cdata_agg |>
-    select(short_label, label) |>
-    inner_join(kegg) |>
-    rename(label_orig = label) |>
-    select(-genome_name)
+# KEGG — DART/AGP outputs (all modules)
+kegg_dart <- read_tsv("./results/functional_agp/kegg_module_damage.tsv") |>
+    inner_join(sample_meta_dart, by = "sample")
 
+sup_table_5_s1 <- kegg_dart |>
+    select(short_label, label_orig = label, module, module_name, module_class,
+           module_category, module_subcategory, avg_coverage, n_proteins,
+           n_damaged, damage_rate, mean_p_damaged, mean_d_aa)
 
-kegg_dmg <- read_tsv("./data/function/kegg/damaged/kegg-modules-summary-damaged-20230525.tsv.gz")
+# KEGG — DART-authenticated (mean posterior >= 0.7)
+sup_table_5_s2 <- sup_table_5_s1 |>
+    filter(mean_p_damaged >= 0.7)
 
-sup_table_5_s2 <- kapk_cdata_agg |>
-    select(short_label, label) |>
-    inner_join(kegg_dmg) |>
-    rename(label_orig = label) |>
-    select(-genome_name)
+# CAZy — DART/AGP outputs (all families)
+cazy_dart <- read_tsv("./results/functional_agp/cazy_family_damage.tsv") |>
+    inner_join(sample_meta_dart, by = "sample")
 
+sup_table_5_s3 <- cazy_dart |>
+    select(short_label, label_orig = label, family, cazy_class, deg_group,
+           n_proteins, n_damaged, damage_rate, mean_p_damaged, mean_d_aa,
+           coverage_mean)
 
-dbcan_data <- read_tsv("./data/function/dbcan/all/dbcan.group-abundances-agg.tsv.gz") |>
-    inner_join(kapk_cdata |> select(label, figure_names) |> distinct()) |>
-    select(-label) |>
-    rename(label = figure_names)
+# CAZy — DART-authenticated (mean posterior >= 0.7)
+sup_table_5_s4 <- sup_table_5_s3 |>
+    filter(mean_p_damaged >= 0.7)
 
-sup_table_5_s3 <- kapk_cdata_agg |>
-    select(short_label, label) |>
-    inner_join(dbcan_data) |>
-    rename(label_orig = label)
+# Viruses — DART/AGP outputs aggregated across samples
+viral_files <- list.files("./results/functional_agp/viral",
+    pattern = "^viral_emi\\.functional\\.tsv$",
+    recursive = TRUE, full.names = TRUE)
+viral_samples <- basename(dirname(viral_files))
 
-dbcan_dmg <- read_tsv("./data/function/dbcan/damaged/dbcan.damaged.group-abundances-agg.tsv.gz") |>
-    inner_join(kapk_cdata |> select(label, figure_names) |> distinct()) |>
-    select(-label) |>
-    rename(label = figure_names)
+viral_emi_raw <- rbindlist(mapply(function(f, s) {
+    d <- fread(f, showProgress = FALSE)[level == "group"]
+    d[, sample := s]
+    d
+}, viral_files, viral_samples, SIMPLIFY = FALSE), fill = TRUE) |>
+    as_tibble() |>
+    rename(reference = function_id) |>
+    inner_join(sample_meta_dart, by = "sample")
 
-sup_table_5_s4 <- kapk_cdata_agg |>
-    select(short_label, label) |>
-    inner_join(dbcan_dmg) |>
-    rename(label_orig = label)
+sup_table_6_s1 <- viral_emi_raw |>
+    filter(mean_posterior >= 0.7) |>
+    select(short_label, label_orig = label, reference, n_genes, n_reads,
+           n_ancient, ancient_frac, mean_posterior, coverage_mean, avg_identity)
 
-# Viruses
-sup_table_6_s1 <- read_tsv("./results/taxonomy/viruses-aa.tsv")
-sup_table_6_s2 <- read_tsv("./results/taxonomy/viruses-aa-annotation.tsv")
+imgvr <- fread("./data/cdata/IMGVR_all_Sequence_information-high_confidence.tsv",
+               showProgress = FALSE) |>
+    janitor::clean_names() |>
+    mutate(n_cds = as.integer(sub("^[^;]+;([^;]+);.*", "\\1",
+        gene_content_total_genes_cds_t_rna_ge_nomad_marker))) |>
+    select(reference = uvig, n_cds, ecosystem = ecosystem_classification)
 
-sup_table_6_s1 <- kapk_cdata_agg |>
-    select(short_label, label) |>
-    inner_join(sup_table_6_s1) |>
-    select(-site, -site_rnk, -member_unit, -strain)
+sup_table_6_s2 <- imgvr |>
+    filter(reference %in% sup_table_6_s1$reference)
 
 # Briggs
 sup_table_7_s1 <- read_tsv("./manuscript/tables/briggs_rl-percid.tsv.gz")
@@ -330,23 +347,23 @@ saveWorkbook(sup_table_3, file = "./manuscript/supplementary/sup_table_3.xlsx", 
 
 sup_table_5 <- createWorkbook()
 addWorksheet(sup_table_5, "S12 - KEGG all")
-addWorksheet(sup_table_5, "S13 - KEGG damaged")
-addWorksheet(sup_table_5, "S14 - dbCAN all")
-addWorksheet(sup_table_5, "S15 - dbCAN damaged")
+addWorksheet(sup_table_5, "S13 - KEGG authenticated")
+addWorksheet(sup_table_5, "S14 - CAZy all")
+addWorksheet(sup_table_5, "S15 - CAZy authenticated")
 
-writeData(sup_table_5, sheet = "S12 - KEGG all", x = sup_table_5_s1 |> janitor::clean_names(case = "sentence"))
-writeData(sup_table_5, sheet = "S13 - KEGG damaged", x = sup_table_5_s2 |> janitor::clean_names(case = "sentence"))
-writeData(sup_table_5, sheet = "S14 - dbCAN all", x = sup_table_5_s3 |> janitor::clean_names(case = "sentence"))
-writeData(sup_table_5, sheet = "S15 - dbCAN damaged", x = sup_table_5_s4 |> janitor::clean_names(case = "sentence"))
+writeData(sup_table_5, sheet = "S12 - KEGG all",           x = sup_table_5_s1 |> janitor::clean_names(case = "sentence"))
+writeData(sup_table_5, sheet = "S13 - KEGG authenticated", x = sup_table_5_s2 |> janitor::clean_names(case = "sentence"))
+writeData(sup_table_5, sheet = "S14 - CAZy all",           x = sup_table_5_s3 |> janitor::clean_names(case = "sentence"))
+writeData(sup_table_5, sheet = "S15 - CAZy authenticated", x = sup_table_5_s4 |> janitor::clean_names(case = "sentence"))
 
 saveWorkbook(sup_table_5, file = "./manuscript/supplementary/sup_table_5.xlsx", overwrite = TRUE)
 
 sup_table_6 <- createWorkbook()
-addWorksheet(sup_table_6, "S16 - Viruses")
-addWorksheet(sup_table_6, "S17 - Viruses annotation")
+addWorksheet(sup_table_6, "S16 - Viral references")
+addWorksheet(sup_table_6, "S17 - IMGVR annotation")
 
-writeData(sup_table_6, sheet = "S16 - Viruses", x = sup_table_6_s1 |> janitor::clean_names(case = "sentence"))
-writeData(sup_table_6, sheet = "S17 - Viruses annotation", x = sup_table_6_s2 |> janitor::clean_names(case = "sentence"))
+writeData(sup_table_6, sheet = "S16 - Viral references",  x = sup_table_6_s1 |> janitor::clean_names(case = "sentence"))
+writeData(sup_table_6, sheet = "S17 - IMGVR annotation",  x = sup_table_6_s2 |> janitor::clean_names(case = "sentence"))
 
 saveWorkbook(sup_table_6, file = "./manuscript/supplementary/sup_table_6.xlsx", overwrite = TRUE)
 
