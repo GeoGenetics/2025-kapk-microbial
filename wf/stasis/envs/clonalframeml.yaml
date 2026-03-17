@@ -1,0 +1,9 @@
+name: clonalframeml
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - clonalframeml=1.13
+  - python=3.11
+  - biopython>=1.83

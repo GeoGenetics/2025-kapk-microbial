@@ -1,0 +1,229 @@
+# AMBER Paper Workflow — Unified Pipeline
+# binning → resolve → QC → deconvolve → phylogenomics → BEAST2
+#
+# ---------------------------------------------------------------------------
+# SETUP: Replace all paths marked with <SET_THIS> before running.
+# See README.md for data download instructions and database setup.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Input data  (NCBI/Zenodo accessions in README.md)
+# ---------------------------------------------------------------------------
+contigs: "<SET_THIS>/assembly/final.contigs.fa"
+bam: "<SET_THIS>/mapping/mapped.reassigned.bam"
+
+# ---------------------------------------------------------------------------
+# Part 0: Reads-to-BAM mapping — set skip_mapping: false to run from scratch
+# When skip_mapping: true, the bam path above is used directly.
+# ---------------------------------------------------------------------------
+skip_mapping: true
+
+mapping:
+  reads:       "<SET_THIS>/fastq/reads.derep.non.fq.gz"
+  threads:     24
+  bowtie2_k:   1000          # alignments per read; must be high for EM reassignment
+  em_preset:   "thorough"    # filterBAM EM preset: fast / balanced / thorough
+  min_ani:     0.0           # filterBAM -A: minimum read ANI filter (0 = keep all)
+  min_reads:   1             # filterBAM -n: minimum reads per reference
+
+# ---------------------------------------------------------------------------
+# Output directory
+# ---------------------------------------------------------------------------
+outdir: "<SET_THIS>/paper_run"
+timestamp: "default"
+
+# ---------------------------------------------------------------------------
+# Skip binning — point to an existing resolve output directory
+# Set skip_binning: false to run AMBER binning from scratch (Part A)
+# ---------------------------------------------------------------------------
+skip_binning: true
+existing_resolve_dir: "<SET_THIS>/paper_run/resolve"
+
+# ---------------------------------------------------------------------------
+# Part A: AMBER binning (used when skip_binning: false)
+# AMBER source: https://github.com/MicrobialDarkMatter/amber
+# ---------------------------------------------------------------------------
+amber:
+  binary: "<SET_THIS>/amber/build/amber_gpu"
+  hmm: "<SET_THIS>/amber/auxiliary/checkm_markers_only.hmm"
+  encoder_seed: 42
+  random_seed: 1006
+  resolution: 5.0
+  bandwidth: 0.2
+  partgraph_ratio: 50
+  n_leiden_restarts: 25
+  n_encoder_restarts: 3
+  n_reps: 3
+
+resolve:
+  min_cobin_frac: 0.667
+  restarts: 25
+
+# ---------------------------------------------------------------------------
+# Quality filters
+# ---------------------------------------------------------------------------
+filter:
+  min_completeness: 50   # MQ threshold for GUNC + GTDB-Tk
+  max_contamination: 10
+
+# ---------------------------------------------------------------------------
+# Ancient bin selection (Part B)
+# ---------------------------------------------------------------------------
+ancient_selection:
+  gtdbtk_clade: "Bog-38"      # GTDB-Tk classification must contain this string
+  min_completeness: 90
+  max_contamination: 5
+  require_gunc_pass: true
+  tiebreak: "completeness"    # if multiple qualify, highest completeness wins
+
+# ---------------------------------------------------------------------------
+# Deconvolution (Part C)
+# ---------------------------------------------------------------------------
+deconvolve:
+  library_type: "ds"
+  em_iterations: 10
+  min_ancient_depth: 3.0
+  min_modern_depth: 2.0
+  threads: 16
+
+# ---------------------------------------------------------------------------
+# Phylogenomics (Parts D–F)
+# Reference genomes: Methanoflorentales NCBI accessions listed in README.md
+# ---------------------------------------------------------------------------
+reference_genomes_dir: "<SET_THIS>/reference_genomes/Methanoflorentales"
+
+marker_hmm_dir: "<SET_THIS>/phylogenomics/hmm"
+markers:
+  - COG0085-FAM000453_finalBA
+  - COG0086-FAM000452_finalBA
+  - DNGNGWU00001
+  - DNGNGWU00002
+  - DNGNGWU00003
+  - DNGNGWU00005
+  - DNGNGWU00006
+  - DNGNGWU00007
+  - DNGNGWU00009
+  - DNGNGWU00010
+  - DNGNGWU00011
+  - DNGNGWU00012
+  - DNGNGWU00013
+  - DNGNGWU00014
+  - DNGNGWU00015
+  - DNGNGWU00016
+  - DNGNGWU00017
+  - DNGNGWU00018
+  - DNGNGWU00019
+  - DNGNGWU00020
+  - DNGNGWU00021
+  - DNGNGWU00022
+  - DNGNGWU00023
+  - DNGNGWU00024
+  - DNGNGWU00025
+  - DNGNGWU00026
+  - DNGNGWU00027
+  - DNGNGWU00028
+  - DNGNGWU00029
+  - DNGNGWU00030
+  - DNGNGWU00031
+  - DNGNGWU00032
+  - DNGNGWU00033
+  - DNGNGWU00034
+  - DNGNGWU00036
+  - DNGNGWU00037
+  - DNGNGWU00039
+  - DNGNGWU00040
+  - L30
+  - S4
+
+hmm_evalue: 1e-10
+mafft_algorithm: "linsi"
+bmge_matrix: "BLOSUM30"
+
+iqtree_model: "GTR+G4"
+iqtree_bootstrap: 1000
+iqtree_alrt: 1000
+iqtree_scf_quartets: 100
+codon_max_gap: 0.2       # codon triplets with gap fraction > this are removed
+
+include_modern_consensus: false   # exclude kapk_dec — deconvolution artifact
+
+# SNP tree — species-level taxa (close relatives of Bog-38 target)
+snp_reference: "SOIL100000032"
+species_level_taxa:
+  - ancient_consensus
+  - s17_ancient_relative
+  - SOIL100000032
+  - NAY3300025461b7
+  - GCA054338395
+  - GCA054338475
+  - GCA963719035
+
+outgroup_taxa:
+  - GCA036832295
+  - GCA003170935
+
+nucmer_minmatch: 500
+snp_tree_model: "GTR+ASC+G4"
+
+# ---------------------------------------------------------------------------
+# BEAST2  (Part E)
+# BEAST2 v2.7.7 + MODEL_SELECTION v1.6.2 + flc v1.2.0
+# Path sampling XMLs in analysis/beast2/xmls/ were generated by
+# scripts/make_nodec_inputs.py and scripts/make_pathsampling_xml.py
+# ---------------------------------------------------------------------------
+beast2_chain_length: 100000000
+beast2_log_every: 5000
+beast2_tree_prior: "BDSS"
+beast2_clock_model: "strict"
+beast2_burnin_pct: 10
+beast2_snp_clock_rate_mean: 1.0e-9
+clock_rate_prior_mean: 5e-9
+clock_rate_prior_sd: 1.0
+sample_age: 2000000      # KapK ancient_consensus tip date: 2 Ma BP
+
+beagle_lib: "<SET_THIS>/opt/beagle-cuda/lib"
+
+# ---------------------------------------------------------------------------
+# Conda environments
+# Create from envs/*.yaml:  conda env create -f envs/beast2.yaml
+# ---------------------------------------------------------------------------
+envs:
+  assembly:   "<CONDA_ENVS>/assembly"
+  bam_filter: "<CONDA_ENVS>/bam-filter"
+  gunc:       "<CONDA_ENVS>/gunc"
+  gtdbtk:     "<CONDA_ENVS>/gtdbtk"
+
+# ---------------------------------------------------------------------------
+# External databases
+# GUNC:   https://grp-bork.embl-community.io/gunc/  (progenomes2.1)
+# GTDB-Tk: https://gtdb.ecogenomics.org/            (release 2.6.1)
+# CheckM2: downloaded automatically by checkm2 database command
+# ---------------------------------------------------------------------------
+checkm2:
+  threads: 16
+
+gunc:
+  db: "<SET_THIS>/databases/gunc_db_progenomes2.1.dmnd"
+  threads: 16
+
+gtdbtk:
+  db: "<CONDA_ENVS>/gtdbtk/share/gtdbtk-2.6.1/db"
+  threads: 16
+
+threads: 16
+
+# ---------------------------------------------------------------------------
+# Part H: Incubation comparison — dRep + S17 read mapping
+# ---------------------------------------------------------------------------
+incubation:
+  hq_bins_dir: "<SET_THIS>/incubations/results/hq_bins"
+  mq_bins_dir: "<SET_THIS>/incubations/results/mq_bins"
+  reads_r1: "<SET_THIS>/incubations/results/fastp/incubation_longDNA_R1.fastq.gz"
+  reads_r2: "<SET_THIS>/incubations/results/fastp/incubation_longDNA_R2.fastq.gz"
+  include_s17_assembly: true
+
+drep:
+  ani: 0.95
+  secondary_ani: 0.99
+  min_overlap: 0.10
+  env: "<CONDA_ENVS>/drep"

@@ -1,0 +1,51 @@
+# AMBER Paper Workflow Configuration
+# Final production run for publication
+
+# Input data
+contigs: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/119_50/assembly/3e3ce8e9f7-derep-assm/final.contigs.fa"
+bam: "/maps/projects/caeg/people/kbd606/scratch/tmp/amber_cython_N1/map/mapped.reassigned.bam"
+
+# Output directory
+outdir: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/paper_run"
+
+# AMBER parameters (winning configuration)
+amber:
+  binary: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/build/amber_gpu"
+  hmm: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/auxiliary/checkm_markers_only.hmm"
+  encoder_seed: 42
+  resolution: 5.0
+  bandwidth: 0.2
+  partgraph_ratio: 50
+  n_leiden_restarts: 25
+  n_reps: 3  # number of independent runs for resolve consensus
+
+# Resolve parameters
+resolve:
+  min_cobin_frac: 0.667
+  restarts: 25
+
+# Conda environments (existing envs with full paths)
+envs:
+  assembly: "/maps/projects/fernandezguerra/apps/opt/conda/envs/assembly"
+  gunc: "/maps/projects/fernandezguerra/apps/opt/conda/envs/gunc"
+  gtdbtk: "/maps/projects/fernandezguerra/apps/opt/conda/envs/gtdbtk"
+
+# External tools
+checkm2:
+  threads: 16
+
+gunc:
+  db: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/tmp/gunc_db/gunc_db_progenomes2.1.dmnd"
+  threads: 16
+
+gtdbtk:
+  db: "/maps/projects/fernandezguerra/apps/opt/conda/envs/gtdbtk/share/gtdbtk-2.6.1/db"
+  threads: 16
+
+# HQ/MQ filter thresholds (applied after CheckM2, before GUNC + GTDB-Tk)
+filter:
+  min_completeness: 50   # MQ threshold
+  max_contamination: 10  # MQ threshold
+
+# Resources
+threads: 16

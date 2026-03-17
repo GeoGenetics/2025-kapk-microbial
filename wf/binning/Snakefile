@@ -1,0 +1,358 @@
+# AMBER Paper Workflow
+# Final production pipeline for publication
+#
+# Pipeline:
+#   1. amber bin2 (3 independent reps with different seeds)
+#   2. checkm2 per rep (quality tracking)
+#   3. amber resolve (consensus from 3 reps + damage stats)
+#   4. checkm2 final (resolved bins)
+#   5. gunc (chimera detection)
+#   6. gtdbtk (taxonomic classification)
+
+import os
+
+configfile: "config.yaml"
+
+OUTDIR = config["outdir"]
+N_REPS = config["amber"]["n_reps"]
+REPS = list(range(1, N_REPS + 1))
+
+# Conda environments
+ENV_ASSEMBLY = config["envs"]["assembly"]
+ENV_GUNC = config["envs"]["gunc"]
+ENV_GTDBTK = config["envs"]["gtdbtk"]
+
+rule all:
+    input:
+        # Final outputs
+        f"{OUTDIR}/resolve/bins",
+        f"{OUTDIR}/resolve/damage_per_bin.tsv",
+        f"{OUTDIR}/resolve/smiley_plot_rates.tsv",
+        f"{OUTDIR}/checkm2_final/quality_report.tsv",
+        f"{OUTDIR}/gunc/GUNC.progenomes_2.1.maxCSS_level.tsv",
+        f"{OUTDIR}/gtdbtk/gtdbtk.bac120.summary.tsv",
+        # Summary
+        f"{OUTDIR}/summary.tsv"
+
+# Filter HQ/MQ bins from CheckM2 for downstream GUNC + GTDB-Tk
+def get_hq_mq_bins(wildcards):
+    checkpoints.filter_hq_mq.get(**wildcards)
+    return f"{OUTDIR}/hq_mq_bins"
+
+# =============================================================================
+# Rule 1: AMBER bin2 (3 independent reps) - requires GPU
+# =============================================================================
+rule amber_bin:
+    input:
+        contigs = config["contigs"],
+        bam = config["bam"],
+        hmm = config["amber"]["hmm"]
+    output:
+        bins = directory(f"{OUTDIR}/rep{{rep}}/bins"),
+        abin = f"{OUTDIR}/rep{{rep}}/bins/run.abin"
+    params:
+        amber = config["amber"]["binary"],
+        encoder_seed = lambda wc: config["amber"]["encoder_seed"] + int(wc.rep) - 1,
+        random_seed = lambda wc: 1000 + int(wc.rep),
+        resolution = config["amber"]["resolution"],
+        bandwidth = config["amber"]["bandwidth"],
+        partgraph_ratio = config["amber"]["partgraph_ratio"],
+        n_leiden_restarts = config["amber"]["n_leiden_restarts"],
+        env = ENV_ASSEMBLY
+    threads: config["threads"]
+    resources:
+        mem_mb = 64000,
+        runtime = 180,  # 3 hours
+        slurm_extra = "--gres=gpu:1"
+    log:
+        f"{OUTDIR}/logs/amber_rep{{rep}}.log"
+    shell:
+        """
+        source /maps/projects/fernandezguerra/apps/opt/conda/etc/profile.d/conda.sh
+        conda activate {params.env}
+        export LD_LIBRARY_PATH={params.env}/lib:$LD_LIBRARY_PATH
+
+        {params.amber} bin2 \
+            --contigs {input.contigs} \
+            --bam {input.bam} \
+            --hmm {input.hmm} \
+            --damage-infonce \
+            --encoder-seed {params.encoder_seed} \
+            --random-seed {params.random_seed} \
+            --resolution {params.resolution} \
+            --bandwidth {params.bandwidth} \
+            --partgraph-ratio {params.partgraph_ratio} \
+            --leiden-restarts {params.n_leiden_restarts} \
+            --threads {threads} \
+            --output {output.bins} \
+            2>&1 | tee {log}
+        """
+
+# =============================================================================
+# Rule 2: CheckM2 per rep (quality tracking)
+# =============================================================================
+rule checkm2_rep:
+    input:
+        bins = f"{OUTDIR}/rep{{rep}}/bins"
+    output:
+        report = f"{OUTDIR}/rep{{rep}}/checkm2/quality_report.tsv"
+    params:
+        outdir = f"{OUTDIR}/rep{{rep}}/checkm2",
+        env = ENV_ASSEMBLY
+    threads: config["checkm2"]["threads"]
+    resources:
+        mem_mb = 32000,
+        runtime = 60
+    log:
+        f"{OUTDIR}/logs/checkm2_rep{{rep}}.log"
+    shell:
+        """
+        source /maps/projects/fernandezguerra/apps/opt/conda/etc/profile.d/conda.sh
+        conda activate {params.env}
+        export LD_LIBRARY_PATH={params.env}/lib:$LD_LIBRARY_PATH
+
+        checkm2 predict \
+            --input {input.bins} \
+            --output-directory {params.outdir} \
+            --extension fa \
+            --threads {threads} \
+            --force \
+            2>&1 | tee {log}
+        """
+
+# =============================================================================
+# Rule 3: AMBER resolve (consensus from 3 reps)
+# =============================================================================
+rule amber_resolve:
+    input:
+        abins = expand(f"{OUTDIR}/rep{{rep}}/bins/run.abin", rep=REPS),
+        contigs = config["contigs"]
+    output:
+        bins = directory(f"{OUTDIR}/resolve/bins"),
+        damage = f"{OUTDIR}/resolve/damage_per_bin.tsv",
+        smiley = f"{OUTDIR}/resolve/smiley_plot_rates.tsv",
+        stats = f"{OUTDIR}/resolve/bin_stats.tsv"
+    params:
+        amber = config["amber"]["binary"],
+        min_cobin_frac = config["resolve"]["min_cobin_frac"],
+        restarts = config["resolve"]["restarts"],
+        env = ENV_ASSEMBLY
+    threads: config["threads"]
+    resources:
+        mem_mb = 32000,
+        runtime = 30
+    log:
+        f"{OUTDIR}/logs/resolve.log"
+    shell:
+        """
+        source /maps/projects/fernandezguerra/apps/opt/conda/etc/profile.d/conda.sh
+        conda activate {params.env}
+        export LD_LIBRARY_PATH={params.env}/lib:$LD_LIBRARY_PATH
+        export OMP_NUM_THREADS={threads}
+
+        {params.amber} resolve \
+            --runs {input.abins} \
+            --contigs {input.contigs} \
+            --min-cobin-frac {params.min_cobin_frac} \
+            --restarts {params.restarts} \
+            --output {output.bins} \
+            2>&1 | tee {log}
+
+        # Move stats files to resolve directory
+        mv {output.bins}/damage_per_bin.tsv {output.damage}
+        mv {output.bins}/smiley_plot_rates.tsv {output.smiley}
+        mv {output.bins}/bin_stats.tsv {output.stats}
+        """
+
+# =============================================================================
+# Rule 4: CheckM2 final (resolved bins)
+# =============================================================================
+rule checkm2_final:
+    input:
+        bins = f"{OUTDIR}/resolve/bins"
+    output:
+        report = f"{OUTDIR}/checkm2_final/quality_report.tsv"
+    params:
+        outdir = f"{OUTDIR}/checkm2_final",
+        env = ENV_ASSEMBLY
+    threads: config["checkm2"]["threads"]
+    resources:
+        mem_mb = 32000,
+        runtime = 60
+    log:
+        f"{OUTDIR}/logs/checkm2_final.log"
+    shell:
+        """
+        source /maps/projects/fernandezguerra/apps/opt/conda/etc/profile.d/conda.sh
+        conda activate {params.env}
+        export LD_LIBRARY_PATH={params.env}/lib:$LD_LIBRARY_PATH
+
+        checkm2 predict \
+            --input {input.bins} \
+            --output-directory {params.outdir} \
+            --extension fa \
+            --threads {threads} \
+            --force \
+            2>&1 | tee {log}
+        """
+
+# =============================================================================
+# Checkpoint: filter HQ/MQ bins from CheckM2 for GUNC + GTDB-Tk
+# Creates hq_mq_bins/ with symlinks to bins passing the quality threshold
+# =============================================================================
+checkpoint filter_hq_mq:
+    input:
+        bins = f"{OUTDIR}/resolve/bins",
+        checkm = f"{OUTDIR}/checkm2_final/quality_report.tsv"
+    output:
+        hq_mq = directory(f"{OUTDIR}/hq_mq_bins")
+    params:
+        min_completeness = config["filter"]["min_completeness"],
+        max_contamination = config["filter"]["max_contamination"]
+    run:
+        import os, csv
+        os.makedirs(output.hq_mq, exist_ok=True)
+        n = 0
+        with open(input.checkm) as f:
+            for row in csv.DictReader(f, delimiter='\t'):
+                if (float(row['Completeness']) >= params.min_completeness and
+                        float(row['Contamination']) <= params.max_contamination):
+                    src = os.path.abspath(os.path.join(input.bins, row['Name'] + '.fa'))
+                    dst = os.path.join(output.hq_mq, row['Name'] + '.fa')
+                    if os.path.exists(src):
+                        os.symlink(src, dst)
+                        n += 1
+        print(f"[filter_hq_mq] {n} bins passed (comp>={params.min_completeness}%, cont<={params.max_contamination}%)")
+
+# =============================================================================
+# Rule 5: GUNC (chimera detection) — runs only on HQ/MQ bins
+# =============================================================================
+rule gunc:
+    input:
+        bins = get_hq_mq_bins
+    output:
+        report = f"{OUTDIR}/gunc/GUNC.progenomes_2.1.maxCSS_level.tsv"
+    params:
+        outdir = f"{OUTDIR}/gunc",
+        db = config["gunc"]["db"],
+        env = ENV_GUNC
+    threads: config["gunc"]["threads"]
+    resources:
+        mem_mb = 32000,
+        runtime = 60
+    log:
+        f"{OUTDIR}/logs/gunc.log"
+    shell:
+        """
+        source /maps/projects/fernandezguerra/apps/opt/conda/etc/profile.d/conda.sh
+        conda activate {params.env}
+        export LD_LIBRARY_PATH={params.env}/lib:$LD_LIBRARY_PATH
+
+        mkdir -p {params.outdir}
+        gunc run \
+            --input_dir {input.bins} \
+            --out_dir {params.outdir} \
+            --db_file {params.db} \
+            --threads {threads} \
+            2>&1 | tee {log}
+        """
+
+# =============================================================================
+# Rule 6: GTDB-Tk (taxonomic classification)
+# =============================================================================
+rule gtdbtk:
+    input:
+        bins = get_hq_mq_bins
+    output:
+        bac_summary = f"{OUTDIR}/gtdbtk/gtdbtk.bac120.summary.tsv"
+    params:
+        outdir = f"{OUTDIR}/gtdbtk",
+        db = config["gtdbtk"]["db"],
+        env = ENV_GTDBTK
+    threads: config["gtdbtk"]["threads"]
+    resources:
+        mem_mb = 128000,
+        runtime = 240  # 4 hours
+    log:
+        f"{OUTDIR}/logs/gtdbtk.log"
+    shell:
+        """
+        source /maps/projects/fernandezguerra/apps/opt/conda/etc/profile.d/conda.sh
+        conda activate {params.env}
+        export LD_LIBRARY_PATH={params.env}/lib:$LD_LIBRARY_PATH
+        export GTDBTK_DATA_PATH={params.db}
+
+        mkdir -p {params.outdir}
+        gtdbtk classify_wf \
+            --genome_dir {input.bins} \
+            --out_dir {params.outdir} \
+            --extension fa \
+            --cpus {threads} \
+            --skip_ani_screen \
+            2>&1 | tee {log}
+
+        # Handle case where no archaeal genomes found
+        touch {params.outdir}/gtdbtk.ar53.summary.tsv
+        """
+
+# =============================================================================
+# Rule 7: Summary report
+# =============================================================================
+rule summary:
+    input:
+        rep_checkm = expand(f"{OUTDIR}/rep{{rep}}/checkm2/quality_report.tsv", rep=REPS),
+        final_checkm = f"{OUTDIR}/checkm2_final/quality_report.tsv",
+        bin_stats = f"{OUTDIR}/resolve/bin_stats.tsv",
+        gunc = f"{OUTDIR}/gunc/GUNC.progenomes_2.1.maxCSS_level.tsv",
+        gtdbtk = f"{OUTDIR}/gtdbtk/gtdbtk.bac120.summary.tsv",
+        damage = f"{OUTDIR}/resolve/damage_per_bin.tsv"
+    output:
+        summary = f"{OUTDIR}/summary.tsv"
+    run:
+        import pandas as pd
+
+        # Load CheckM2 final
+        checkm = pd.read_csv(input.final_checkm, sep='\t')
+        checkm = checkm[['Name', 'Completeness', 'Contamination', 'Genome_Size', 'GC_Content']]
+        checkm.columns = ['bin', 'completeness', 'contamination', 'genome_size', 'gc_content']
+
+        # Load GUNC
+        gunc = pd.read_csv(input.gunc, sep='\t')
+        gunc = gunc[['genome', 'clade_separation_score', 'pass.GUNC']]
+        gunc.columns = ['bin', 'gunc_css', 'gunc_pass']
+
+        # Load GTDB-Tk
+        gtdbtk = pd.read_csv(input.gtdbtk, sep='\t')
+        gtdbtk = gtdbtk[['user_genome', 'classification']]
+        gtdbtk.columns = ['bin', 'gtdb_classification']
+
+        # Load damage
+        damage = pd.read_csv(input.damage, sep='\t')
+        damage = damage[['bin', 'p_ancient', 'ct_1p', 'ga_1p', 'damage_class']]
+
+        # Merge all
+        summary = checkm.merge(gunc, on='bin', how='left')
+        summary = summary.merge(gtdbtk, on='bin', how='left')
+        summary = summary.merge(damage, on='bin', how='left')
+
+        # Quality tiers
+        summary['quality'] = 'LQ'
+        summary.loc[(summary['completeness'] >= 50) & (summary['contamination'] < 10), 'quality'] = 'MQ'
+        summary.loc[(summary['completeness'] >= 90) & (summary['contamination'] < 5), 'quality'] = 'HQ'
+
+        # Sort by quality and completeness
+        summary = summary.sort_values(['quality', 'completeness'], ascending=[False, False])
+
+        # Save
+        summary.to_csv(output.summary, sep='\t', index=False)
+
+        # Print summary stats
+        print(f"\n{'='*60}")
+        print(f"AMBER Paper Run Summary")
+        print(f"{'='*60}")
+        print(f"Total bins: {len(summary)}")
+        print(f"HQ bins (>=90% comp, <5% cont): {(summary['quality'] == 'HQ').sum()}")
+        print(f"MQ bins (>=50% comp, <10% cont): {(summary['quality'] == 'MQ').sum()}")
+        print(f"GUNC pass: {summary['gunc_pass'].sum()}")
+        print(f"Ancient bins: {(summary['damage_class'] == 'ancient').sum()}")
+        print(f"{'='*60}\n")

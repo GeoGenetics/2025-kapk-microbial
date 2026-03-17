@@ -1,0 +1,6 @@
+name: bmge
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - bmge=1.12
