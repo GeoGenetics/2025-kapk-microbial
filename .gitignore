@@ -11,3 +11,41 @@ analysis/data/*
 analysis/results/*
 ~$*.*
 *.Rproj
+
+# Exploratory/internal scripts — not part of the public analysis
+analysis/scripts/assembly-overview.R
+analysis/scripts/code-dump.R
+analysis/scripts/taxonomic-overview.R
+analysis/scripts/smags-profiling.R
+analysis/scripts/run_agp_damage_array.slurm.sh
+analysis/scripts/run_agp_damage_pipeline.sh
+
+# Data directories — distributed via ERDA, not GitHub
+analysis/manuscript/
+
+# Output figures and internal documents
+Figure-*.png
+analysis/Figure-*.pdf
+*.docx
+
+# Superseded supplementary tables
+supp-tab/
+
+# Old xFilter rules superseded by DART AGP rules in wf/analysis/function/
+wf/analysis/function/rules/mmseqs-*
+wf/analysis/function/rules/resistome-*
+wf/analysis/function/rules/stats-*
+wf/analysis/function/rules/read-*
+wf/analysis/function/rules/get-damaged-reads.smk
+wf/analysis/function/rules_emi.smk
+wf/analysis/function/config.denbi.yaml
+
+# Extra scripts also tracked at top level (live in extra/ only)
+analysis/scripts/benchmark-saturation.R
+analysis/scripts/bowtie2-benchmarks.R
+analysis/scripts/lib-sims.R
+analysis/scripts/simulations.R
+analysis/scripts/sourcetracker-sources-curation.R
+
+# Empty artefact directories
+results/

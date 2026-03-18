@@ -1,89 +1,100 @@
-# Basic config File
-# Where is the workflow
-wdir: "/path/to/workflow/function"
-# Where is the data
+# AGP KEGG Damage Workflow Config
+# DART + KEGG/dbCAN/Viral functional annotation with damage validation
+
+###############################################################################
+# Paths
+###############################################################################
+wdir: "/path/to/workflow"
 sdir: "/path/to/input/data"
-# Where is the output
 rdir: "/path/to/results"
-
 tmp: "/path/to/tmp"
-sample_file_read: "/path/to/assets/samples.tsv"
+sample_file_read: "/path/to/samples.tsv"
 
 ###############################################################################
-#
-# Common config values
-#
+# Tool binaries
 ###############################################################################
-#Add binary paths
 mmseqs_bin: mmseqs
-xfilter_bin: xFilter
 seqkit_bin: seqkit
-rename_bin: rename.sh
 vsearch_bin: vsearch
-tadpole_bin: tadpole.sh
-loglog_bin: loglog.sh
-bowtie2_bin: bowtie2
-samtools_bin: samtools
-filter_bam_bin: filterBAM
 
-# threads
+# AGP binary
+agp_bin: "/maps/projects/fernandezguerra/apps/repos/ancient-gene-prediction/build_release/dart"
+
+###############################################################################
+# Thread allocation
+###############################################################################
 seqkit_threads: 16
-extract_threads: 8
-norm_threads: 32
-read_rename_threads: 16
-read_extension_threads: 8
 read_derep_threads: 8
 mmseqs2_threads: 32
 anvio_threads: 4
-resistome_reads_threads: 32
+agp_threads: 4
 
-# Rename reads
+###############################################################################
+# Read preprocessing
+###############################################################################
 rename_reads: False
 read_minlen: 30
-rename_parms: "addunderscore=f overwrite=t"
-
-# Read dereplication
 derep_reads: True
 derep_parms: "--strand both --sizeout --fastaout -"
 
-# Read extension
-extend_reads: True
-loglog_bits: 16
-loglog_hashes: 3
-loglog_table_cap: 0.5
-loglog_memory: "300G"
-loglog_seed: 1234
-tadpole_mode: "extend"
-tadpole_length: 100
-tadpole_memory: "300G"
-tadpole_k: 17
-minprobprefilter: f
-trimends: 9
-prefilter: 0
-# set to 0 for automatic, with a value run will be deterministic (in bytes)
-maxmem: "214748364800"
-ibb: f
-ecc: t
-ecco: f
-conservative: t
+###############################################################################
+# AGP settings
+###############################################################################
+# Taxonomic domain for hexamer tables: gtdb, fungi, plant, protozoa, invertebrate, viral
+agp_domain: "gtdb"
 
-# Xfilter & MMseqs2 parameters
-# Kegg reads mapping
+# Minimum sequence identity for MMseqs2 (VTML20 allows lower identity)
+agp_min_seq_id: "0.5"
+
+# Damage probability threshold for filtering (posterior >= threshold → is_damaged)
+damage_threshold: 0.5
+
+# damage-annotate filtering options
+# prior_ancient: Prior P(ancient) for Bayesian scorer (default: 0.10)
+prior_ancient: 0.10
+# damage_min_reads: Min supporting reads per protein (default: 3)
+damage_min_reads: 3
+# damage_min_breadth: Min alignment breadth 0-1 — fraction of protein covered by reads (default: 0.10)
+damage_min_breadth: 0.10
+# damage_min_depth: Min mean depth across protein (default: 0 = disabled)
+# Keep at 0 for ancient DNA — short reads on long proteins give low depth even for genuine hits
+damage_min_depth: 0
+# damage_threads: Threads for damage-annotate (default: 8)
+damage_threads: 8
+# damage_preset: Apply filter bundle — "loose" (maximize recall) or "strict" (maximize precision)
+# Leave empty for defaults. strict enables auto-calibrate-spurious + tighter coverage filters.
+# damage_preset: "strict"
+# damage_auto_calibrate: Auto-derive min-positional-score and min-terminal-ratio from data
+# Replaces x-filter depth-evenness: removes proteins where reads pile at termini only
+damage_auto_calibrate: true
+
+###############################################################################
+# VTML20 matrix (optimized for ancient DNA damage)
+###############################################################################
+vtml20_matrix: "/maps/projects/fernandezguerra/apps/repos/read2Struct/read2Struct/data/mmseqs2/sub-mat/VTML20.out"
+
+###############################################################################
+# KEGG database
+###############################################################################
+kegg_db: "/datasets/fernandezguerra/data/DB/KEGG/20220228/genes/mmseqs2/kegg_genes-i0.9-c0.8"
+kegg_gene_list: "/datasets/fernandezguerra/data/DB/KEGG/20220228/genes/kegg-genes.txt"
 annotation_source: "KEGGgenes"
-kegg_db: "/path/to/db/KEGG/kegg_genes-i0.9-c0.8"
-kegg_gene_list: "/path/to/db/KEGG/ko_genes.list"
-mmseqs_kegg_parms: "--comp-bias-corr 0 --mask 0 -e 1e-5 --exact-kmer-matching 1 --sub-mat PAM30.out -s 3 -k 6 --spaced-kmer-mode 1 --spaced-kmer-pattern 11011101 --min-length 15 --format-mode 2 -c 0.8 --cov-mode 2 --min-seq-id 0.6"
-xfilter_parms: "-n 25 -b 20 -e 1e-5 --breadth-expected-ratio 0 -f depth_evenness --depth-evenness 1"
-anvi_estimate_extra_parms: "--user-modules /path/to/db/kegg-modules"
+anvi_estimate_extra_parms: ""
 
-# dbCAN read mapping
+###############################################################################
+# dbCAN (CAZy) database
+###############################################################################
 dbcan_db: "/path/to/db/dbCAN/CAZyDB"
 dbcan_gene_list: "/path/to/db/dbCAN/dbCAN_gene.list"
-mmseqs_dbcan_parms: "--comp-bias-corr 0 --mask 0 -e 1e-5 --exact-kmer-matching 1 --sub-mat PAM30.out -s 3 -k 6 --spaced-kmer-mode 1 --spaced-kmer-pattern 11011101 --min-length 15 --format-mode 2 -c 0.8 --cov-mode 2 --min-seq-id 0.6"
 dbcan_annotation_source: "dbCAN"
 
-# Get damaged reads
-dread_bin: dReads
-dread_filter: '{ "Bayesian_D_max": 0.1, "Bayesian_z": 2.5 }'
-mdmg_weight: [1]
-get_dmg_reads: True
+###############################################################################
+# Viral database
+###############################################################################
+viral_db: "/path/to/db/viral/viral_proteins"
+
+###############################################################################
+# Legacy MMseqs2 parameters (for nucleotide-based search, not used with AGP)
+###############################################################################
+mmseqs_kegg_parms: "--comp-bias-corr 0 --mask 0 -e 1e-5 --exact-kmer-matching 1 --sub-mat PAM30.out -s 3 -k 6 --spaced-kmer-mode 1 --spaced-kmer-pattern 11011101 --min-length 15 --format-mode 2 -c 0.8 --cov-mode 2 --min-seq-id 0.6"
+mmseqs_dbcan_parms: "--comp-bias-corr 0 --mask 0 -e 1e-5 --exact-kmer-matching 1 --sub-mat PAM30.out -s 3 -k 6 --spaced-kmer-mode 1 --spaced-kmer-pattern 11011101 --min-length 15 --format-mode 2 -c 0.8 --cov-mode 2 --min-seq-id 0.6"

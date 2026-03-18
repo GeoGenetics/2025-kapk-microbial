@@ -131,10 +131,10 @@ sup_table_2_s2 <- read_tsv("./data/sourcetracker/standard/k1000/95/tp-mapping-fi
     inner_join(tax_info) |>
     filter(label %in% st_labels)
 
-st_results <- read_tsv("./results/sourcetracker/analysis-gm-results/output_biome-subclass/results/mixing_proportions.txt") |>
+st_results <- read_tsv("./results/sourcetracker/mixing_proportions.txt") |>
     rename(figure_names = "#SampleID")
 
-st_results_sd <- read_tsv("./results/sourcetracker/analysis-gm-results/output_biome-subclass/results/mixing_proportions_stds.txt") |>
+st_results_sd <- read_tsv("./results/sourcetracker/mixing_proportions_stds.txt") |>
     rename(figure_names = "#SampleID")
 
 st_results_long <- st_results |>

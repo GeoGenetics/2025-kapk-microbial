@@ -21,7 +21,9 @@ showtext_auto()
 FONT <- "DroidSans"
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-BASE         <- "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/paper_run"
+# Data lives in data/methanoflorens/ relative to the analysis/ working directory.
+# ERDA package mirrors this structure so the script runs without modification.
+BASE         <- "./data/methanoflorens"
 MCC_FILE     <- file.path(BASE, "beast2_nodec/tipdating/codon_tipdating_mcc.tree")
 IQTREE_FILE  <- file.path(BASE, "phylogenomics_79taxa_bak/08_trees/codon12_ml_tree.treefile")
 ANI_FILE     <- file.path(BASE, "fastani/deconvolved_vs_refs.tsv")
@@ -32,8 +34,8 @@ S17_FRAG     <- file.path(BASE, "s17_assembly/deconvolve/read_length_histogram.t
 S17_SMILEY   <- file.path(BASE, "s17_assembly/deconvolve/smiley_data.tsv")
 SNP_FILE     <- file.path(BASE, "phylogenomics_79taxa_bak/11_focal_snps/focal_pairwise_snp_counts.tsv")
 ANI_FILE_FOC <- file.path(BASE, "phylogenomics_79taxa_bak/11_focal_snps/focal_pairwise_ani.tsv")
-OUTDIR       <- "/maps/projects/fernandezguerra/apps/repos/2025-kapk-microbial/analysis/results/figures"
-META_FILE    <- "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/tmp/deconv_bin28/phylogenomics/Methanoflorentales_update_2026-02-09/_Methanoflorentales_update_METADAT_2026-02-09.txt"
+OUTDIR       <- "./results/figures"
+META_FILE    <- file.path(BASE, "methanoflorens_metadata.txt")
 
 # ── BEAST2 log files ──────────────────────────────────────────────────────────
 NODEC_BASE      <- file.path(BASE, "beast2_nodec")

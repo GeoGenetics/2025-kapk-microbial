@@ -58,6 +58,28 @@ library(readxl)
 library(unikn)
 ```
 
+## Supplementary Table Scripts
+
+Located in `scripts/` — standalone scripts that generate supplementary tables
+from pipeline outputs. Run from the `analysis/` directory.
+
+| Script | Output | Description |
+|--------|--------|-------------|
+| `scripts/generate_dart_tables.R` | `../supp-tab-v2/sup_table_5.xlsx`, `sup_table_6.xlsx` | KEGG module, CAZy family, viral reference damage (DART pipeline) |
+| `scripts/generate_mag_table.R` | `../supp-tab-v2/sup_table_9.xlsx`, `results/mag_quality/` | MAG quality table (CheckM2 + GUNC + GTDB-Tk + damage; HQ/MQ/LQ) |
+
+**DART benchmark figures and scripts:** `results/dart_benchmark/` (see its README).
+
+## MIMAG Quality Thresholds
+
+Applied in `scripts/generate_mag_table.R`:
+- **HQ**: completeness ≥ 90%, contamination < 5%
+- **MQ**: completeness ≥ 50%, contamination < 10%
+- **LQ**: all others
+
+Strict MIMAG also requires rRNA genes + ≥18 tRNAs for HQ; not applied here
+due to ancient DNA fragmentation. GUNC pass/fail is reported separately.
+
 ## Script Organization
 
 The analysis consists of multiple R scripts that should be run in sequence:
