@@ -28,8 +28,9 @@ Figure-*.png
 analysis/Figure-*.pdf
 *.docx
 
-# Superseded supplementary tables
+# Supplementary tables — distributed separately, not on GitHub
 supp-tab/
+supp-tab-v2/
 
 # Old xFilter rules superseded by DART AGP rules in wf/analysis/function/
 wf/analysis/function/rules/mmseqs-*
