@@ -21,46 +21,125 @@ sample_meta_dart <- kapk_cdata |>
     ) |>
     select(sample, short_label, label)
 
-# ── sup_table_5: KEGG + CAZy ─────────────────────────────────────────────────
+# ── KEGG: anvio completeness (per-sample) ─────────────────────────────────────
+
+anvio_files <- list.files("./results/functional_agp/kegg",
+                          pattern = "^anvio_modules\\.txt$",
+                          recursive = TRUE, full.names = TRUE)
+anvio_samples <- basename(dirname(anvio_files))
+
+anvio_raw <- rbindlist(mapply(function(f, s) {
+    d <- fread(f, showProgress = FALSE)
+    d[, sample := s]
+    d
+}, anvio_files, anvio_samples, SIMPLIFY = FALSE), fill = TRUE) |>
+    as_tibble() |>
+    inner_join(sample_meta_dart, by = "sample") |>
+    select(
+        sample, short_label, label,
+        module,
+        stepwise_completeness  = stepwise_module_completeness,
+        stepwise_is_complete   = stepwise_module_is_complete,
+        pathwise_completeness  = pathwise_module_completeness,
+        pathwise_is_complete   = pathwise_module_is_complete,
+        prop_unique_enzymes    = proportion_unique_enzymes_present,
+        anvio_avg_coverage     = emi_anvio_ko_tsv_fixed_tsv_avg_coverage,
+        anvio_avg_detection    = emi_anvio_ko_tsv_fixed_tsv_avg_detection
+    )
+
+# ── KEGG: DART damage (aggregate) ─────────────────────────────────────────────
 
 kegg_dart <- read_tsv("./results/functional_agp/kegg_module_damage.tsv",
                       show_col_types = FALSE) |>
     inner_join(sample_meta_dart, by = "sample")
 
-sup_table_5_s1 <- kegg_dart |>
-    select(short_label, label_orig = label, module, module_name, module_class,
-           module_category, module_subcategory, avg_coverage, n_proteins,
-           n_damaged, damage_rate, mean_p_damaged, mean_d_aa)
+# Join damage + anvio completeness
+kegg_full <- kegg_dart |>
+    left_join(anvio_raw |> select(-short_label, -label),
+              by = c("sample", "module")) |>
+    select(
+        short_label, label_orig = label,
+        module, module_name, module_class, module_category, module_subcategory,
+        # Anvio completeness
+        stepwise_completeness, stepwise_is_complete,
+        pathwise_completeness, pathwise_is_complete,
+        prop_unique_enzymes,
+        # Coverage
+        avg_coverage, anvio_avg_coverage, anvio_avg_detection,
+        # DART damage
+        n_proteins, n_damaged, damage_rate,
+        mean_p_damaged, median_p_damaged,
+        mean_combined_score, mean_log_bf, mean_delta_mle, mean_d_aa,
+        mean_ancient_frac
+    )
 
-sup_table_5_s2 <- sup_table_5_s1 |> filter(mean_p_damaged >= 0.7)
+sup_table_5_s1 <- kegg_full
+sup_table_5_s2 <- kegg_full |> filter(pathwise_completeness >= 0.75)
+
+# ── CAZy: DART damage (aggregate) + EMI stats (per-sample) ───────────────────
 
 cazy_dart <- read_tsv("./results/functional_agp/cazy_family_damage.tsv",
                       show_col_types = FALSE) |>
     inner_join(sample_meta_dart, by = "sample")
 
-sup_table_5_s3 <- cazy_dart |>
-    select(short_label, label_orig = label, family, cazy_class, deg_group,
-           n_proteins, n_damaged, damage_rate, mean_p_damaged, mean_d_aa,
-           coverage_mean)
+cazy_emi_files <- list.files("./results/functional_agp/cazy",
+                              pattern = "^cazy_emi\\.functional\\.tsv$",
+                              recursive = TRUE, full.names = TRUE)
+cazy_emi_samples <- basename(dirname(cazy_emi_files))
 
-sup_table_5_s4 <- sup_table_5_s3 |> filter(mean_p_damaged >= 0.7)
+cazy_emi_raw <- rbindlist(mapply(function(f, s) {
+    d <- fread(f, showProgress = FALSE)
+    d[, sample := s]
+    d
+}, cazy_emi_files, cazy_emi_samples, SIMPLIFY = FALSE), fill = TRUE) |>
+    as_tibble() |>
+    rename(family = function_id) |>
+    inner_join(sample_meta_dart, by = "sample") |>
+    select(
+        sample, family,
+        n_reads, n_ancient, n_modern, ancient_frac,
+        ci_low, ci_high, mean_posterior,
+        n_damaged_genes, damaged_gene_frac, damage_enrichment,
+        avg_identity, avg_read_length
+    )
+
+cazy_full <- cazy_dart |>
+    left_join(cazy_emi_raw, by = c("sample", "family")) |>
+    select(
+        short_label, label_orig = label,
+        family, cazy_class, deg_group,
+        # Coverage + read stats
+        coverage_mean, n_reads, n_ancient, n_modern, ancient_frac,
+        ci_low, ci_high,
+        avg_identity, avg_read_length,
+        # DART damage
+        n_proteins, n_damaged, damage_rate,
+        mean_p_damaged, mean_combined_score, mean_delta_mle, mean_d_aa,
+        # EMI posterior
+        mean_posterior, n_damaged_genes, damaged_gene_frac, damage_enrichment
+    )
+
+sup_table_5_s3 <- cazy_full
+sup_table_5_s4 <- cazy_full |> filter(mean_p_damaged >= 0.7)
+
+# ── Write sup_table_5 ─────────────────────────────────────────────────────────
 
 wb5 <- createWorkbook()
-addWorksheet(wb5, "S13 - KEGG all")
-addWorksheet(wb5, "S14 - KEGG authenticated")
+addWorksheet(wb5, "S13 - KEGG detected")
+addWorksheet(wb5, "S14 - KEGG complete")
 addWorksheet(wb5, "S15 - CAZy all")
 addWorksheet(wb5, "S16 - CAZy authenticated")
 
-writeData(wb5, "S13 - KEGG all",           sup_table_5_s1 |> clean_names(case = "sentence"))
-writeData(wb5, "S14 - KEGG authenticated", sup_table_5_s2 |> clean_names(case = "sentence"))
+writeData(wb5, "S13 - KEGG detected",  sup_table_5_s1 |> clean_names(case = "sentence"))
+writeData(wb5, "S14 - KEGG complete",  sup_table_5_s2 |> clean_names(case = "sentence"))
 writeData(wb5, "S15 - CAZy all",           sup_table_5_s3 |> clean_names(case = "sentence"))
 writeData(wb5, "S16 - CAZy authenticated", sup_table_5_s4 |> clean_names(case = "sentence"))
 
 saveWorkbook(wb5, "../supp-tab-v2/sup_table_5.xlsx", overwrite = TRUE)
 cat("Saved sup_table_5.xlsx\n")
-cat("  S13 KEGG all:          ", nrow(sup_table_5_s1), "rows\n")
-cat("  S14 KEGG authenticated:", nrow(sup_table_5_s2), "rows\n")
-cat("  S15 CAZy all:          ", nrow(sup_table_5_s3), "rows\n")
+cat("  S13 KEGG detected:", nrow(sup_table_5_s1), "rows,", ncol(sup_table_5_s1), "cols\n")
+cat("  S14 KEGG complete:", nrow(sup_table_5_s2), "rows\n")
+cat("  S15 CAZy all:          ", nrow(sup_table_5_s3), "rows,", ncol(sup_table_5_s3), "cols\n")
 cat("  S16 CAZy authenticated:", nrow(sup_table_5_s4), "rows\n")
 
 # ── sup_table_6: Viral ────────────────────────────────────────────────────────
