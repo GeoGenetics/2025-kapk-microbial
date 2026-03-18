@@ -12,13 +12,12 @@ Analysis code and workflows for Fernandez-Guerra et al. 2025 — ancient metagen
 │   ├── libs/             # Shared R helper functions
 │   ├── beast2/           # BEAST2 XMLs and MCC trees (Methanoflorens stasis)
 │   └── .scripts/         # Packaging utilities (stage_erda.sh)
-├── wf/
-│   ├── analysis/
-│   │   ├── function/     # DART/AGP functional profiling pipeline (KEGG + CAZy)
-│   │   └── taxonomy/     # Taxonomic profiling + metaDMG authentication pipeline
-│   ├── binning/          # MAG binning quality assessment (CheckM2, GUNC, GTDB-Tk)
-│   └── stasis/           # Methanoflorens evolutionary stasis pipeline (phylogenomics + BEAST2)
-└── supp-tab-v2/          # Supplementary tables (S1–S22) and extended data figures
+└── wf/
+    ├── analysis/
+    │   ├── function/     # DART/AGP functional profiling pipeline (KEGG + CAZy)
+    │   └── taxonomy/     # Taxonomic profiling + metaDMG authentication pipeline
+    ├── binning/          # MAG binning quality assessment (CheckM2, GUNC, GTDB-Tk)
+    └── stasis/           # Methanoflorens evolutionary stasis pipeline (phylogenomics + BEAST2)
 ```
 
 ## Data
@@ -58,8 +57,8 @@ Run from the `analysis/` directory in order:
 | `11-reextractions.R` | Re-extraction comparison |
 | `14-summary-tables.R` | Supplementary tables generation |
 | `15--methanoflorens-stasis.R` | Methanoflorens evolutionary stasis figure |
-| `generate_dart_tables.R` | DART supplementary tables (S13–S17) |
-| `generate_mag_table.R` | MAG quality table (S18, sup_table_9.xlsx) |
+| `generate_dart_tables.R` | DART supplementary tables |
+| `generate_mag_table.R` | MAG quality table |
 | `rerender_heatmap.R` | Functional heatmap figure |
 
 ## Workflows
@@ -77,22 +76,6 @@ CheckM2 completeness/contamination, GUNC chimerism detection, and GTDB-Tk phylog
 
 ### Evolutionary stasis (`wf/stasis/`)
 Phylogenomics pipeline for Methanoflorens: marker gene extraction, alignment, IQ-TREE ML trees, BEAST2 tip-dating, SNP matrix construction, and pN/pS calculation.
-
-## Supplementary tables
-
-Pre-generated Excel files in `supp-tab-v2/`:
-
-| File | Contents |
-|------|----------|
-| `sup_table_1.xlsx` | Sample information, controls, uplift model, taxonomy/damage, re-extractions, biomarkers |
-| `sup_table_2.xlsx` | SourceTracker sources and contributions |
-| `sup_table_3.xlsx` | GEM and Woodcroft MAG mapping |
-| `sup_table_4.xlsx` | Custom KEGG modules |
-| `sup_table_5.xlsx` | KEGG module damage (DART) |
-| `sup_table_6.xlsx` | Viral reference damage (DART) |
-| `sup_table_7.xlsx` | Briggs RL damage patterns |
-| `sup_table_8.xlsx` | Simulation and benchmark results |
-| `sup_table_9.xlsx` | MAG quality (CheckM2 + GUNC + GTDB-Tk) |
 
 ## Requirements
 
