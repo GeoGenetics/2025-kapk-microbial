@@ -21,106 +21,135 @@ sample_meta_dart <- kapk_cdata |>
     ) |>
     select(sample, short_label, label)
 
-# ── KEGG: anvio completeness (per-sample) ─────────────────────────────────────
+# ── Build KEGG per-sample module table from raw per-sample files ──────────────
+#
+# For each sample:
+#   anvio_modules.txt  → module metadata + completeness + coverage
+#   emi.functional.tsv → KO-level damage stats (level == "group")
+#   anvio_hits.txt     → KO → module(s) mapping (modules_with_enzyme)
+#
+# KO stats are aggregated to module level via the KO→module mapping.
 
-anvio_files <- list.files("./results/functional_agp/kegg",
-                          pattern = "^anvio_modules\\.txt$",
-                          recursive = TRUE, full.names = TRUE)
-anvio_samples <- basename(dirname(anvio_files))
+build_kegg_sample <- function(sample_dir) {
+    sample <- basename(sample_dir)
 
-anvio_raw <- rbindlist(mapply(function(f, s) {
-    d <- fread(f, showProgress = FALSE)
-    d[, sample := s]
-    d
-}, anvio_files, anvio_samples, SIMPLIFY = FALSE), fill = TRUE) |>
+    # Module completeness + metadata + coverage
+    anvio <- fread(file.path(sample_dir, "anvio_modules.txt"),
+                   showProgress = FALSE)
+    anvio_mod <- anvio[, .(
+        module,
+        module_name    = module_name,
+        module_class   = module_class,
+        module_category    = module_category,
+        module_subcategory = module_subcategory,
+        stepwise_completeness = stepwise_module_completeness,
+        pathwise_completeness = pathwise_module_completeness,
+        prop_unique_enzymes   = proportion_unique_enzymes_present,
+        avg_coverage   = emi_anvio_ko_tsv_fixed_tsv_avg_coverage,
+        avg_detection  = emi_anvio_ko_tsv_fixed_tsv_avg_detection
+    )]
+
+    # KO → module mapping (one row per KO-module pair)
+    hits <- fread(file.path(sample_dir, "anvio_hits.txt"),
+                  showProgress = FALSE)
+    ko_mod <- hits[modules_with_enzyme != ""][
+        , .(module = unlist(strsplit(modules_with_enzyme, ","), use.names = FALSE)),
+        by = .(ko = enzyme)
+    ] |> unique()
+
+    # KO-level damage stats
+    emi <- fread(file.path(sample_dir, "emi.functional.tsv"),
+                 showProgress = FALSE)
+    ko_dmg <- emi[, .(
+        ko              = function_id,
+        n_genes, n_reads, n_ancient, ancient_frac,
+        ci_low, ci_high,
+        mean_posterior,
+        n_damaged_genes, damaged_gene_frac, damage_enrichment,
+        coverage_mean, avg_identity, avg_read_length
+    )]
+
+    # Join KO damage with KO→module mapping
+    merged <- merge(ko_mod, ko_dmg, by = "ko", all.x = FALSE)
+
+    # Aggregate KO stats to module level (weighted by n_genes)
+    mod_dmg <- merged[, .(
+        n_ko              = .N,
+        n_genes           = sum(n_genes),
+        n_reads           = sum(n_reads),
+        n_ancient         = sum(n_ancient),
+        ancient_frac      = weighted.mean(ancient_frac, n_genes, na.rm = TRUE),
+        ci_low            = weighted.mean(ci_low, n_genes, na.rm = TRUE),
+        ci_high           = weighted.mean(ci_high, n_genes, na.rm = TRUE),
+        mean_posterior    = weighted.mean(mean_posterior, n_genes, na.rm = TRUE),
+        n_damaged_genes   = sum(n_damaged_genes),
+        damaged_gene_frac = weighted.mean(damaged_gene_frac, n_genes, na.rm = TRUE),
+        damage_enrichment = weighted.mean(damage_enrichment, n_genes, na.rm = TRUE),
+        coverage_mean     = weighted.mean(coverage_mean, n_genes, na.rm = TRUE),
+        avg_identity      = weighted.mean(avg_identity, n_genes, na.rm = TRUE),
+        avg_read_length   = weighted.mean(avg_read_length, n_genes, na.rm = TRUE)
+    ), by = module]
+
+    # Join module completeness with damage stats
+    result <- merge(anvio_mod, mod_dmg, by = "module", all.x = TRUE)
+    result[, sample := sample]
+    result
+}
+
+kegg_dirs <- list.dirs("./results/functional_agp/kegg",
+                        recursive = FALSE, full.names = TRUE)
+kegg_dirs <- kegg_dirs[file.exists(file.path(kegg_dirs, "anvio_modules.txt"))]
+
+cat("Building KEGG table from", length(kegg_dirs), "samples...\n")
+kegg_all <- rbindlist(lapply(kegg_dirs, build_kegg_sample), fill = TRUE) |>
     as_tibble() |>
     inner_join(sample_meta_dart, by = "sample") |>
     select(
-        sample, short_label, label,
-        module,
-        stepwise_completeness  = stepwise_module_completeness,
-        stepwise_is_complete   = stepwise_module_is_complete,
-        pathwise_completeness  = pathwise_module_completeness,
-        pathwise_is_complete   = pathwise_module_is_complete,
-        prop_unique_enzymes    = proportion_unique_enzymes_present,
-        anvio_avg_coverage     = emi_anvio_ko_tsv_fixed_tsv_avg_coverage,
-        anvio_avg_detection    = emi_anvio_ko_tsv_fixed_tsv_avg_detection
-    )
-
-# ── KEGG: DART damage (aggregate) ─────────────────────────────────────────────
-
-kegg_dart <- read_tsv("./results/functional_agp/kegg_module_damage.tsv",
-                      show_col_types = FALSE) |>
-    inner_join(sample_meta_dart, by = "sample")
-
-# Join damage + anvio completeness
-kegg_full <- kegg_dart |>
-    left_join(anvio_raw |> select(-short_label, -label),
-              by = c("sample", "module")) |>
-    select(
         short_label, label_orig = label,
         module, module_name, module_class, module_category, module_subcategory,
-        # Anvio completeness
-        stepwise_completeness, stepwise_is_complete,
-        pathwise_completeness, pathwise_is_complete,
-        prop_unique_enzymes,
-        # Coverage
-        avg_coverage, anvio_avg_coverage, anvio_avg_detection,
-        # DART damage
-        n_proteins, n_damaged, damage_rate,
-        mean_p_damaged, median_p_damaged,
-        mean_combined_score, mean_log_bf, mean_delta_mle, mean_d_aa,
-        mean_ancient_frac
+        stepwise_completeness, pathwise_completeness, prop_unique_enzymes,
+        avg_coverage, avg_detection,
+        n_ko, n_genes, n_reads, n_ancient, ancient_frac,
+        ci_low, ci_high,
+        mean_posterior, n_damaged_genes, damaged_gene_frac, damage_enrichment,
+        coverage_mean, avg_identity, avg_read_length
     )
 
-sup_table_5_s1 <- kegg_full
-sup_table_5_s2 <- kegg_full |> filter(pathwise_completeness >= 0.75)
+sup_table_5_s1 <- kegg_all
+sup_table_5_s2 <- kegg_all |> filter(pathwise_completeness >= 0.75)
 
-# ── CAZy: DART damage (aggregate) + EMI stats (per-sample) ───────────────────
+# ── Build CAZy per-sample table from raw per-sample files ─────────────────────
+#
+# cazy_emi.functional.tsv is already at family level (function_id = family)
 
-cazy_dart <- read_tsv("./results/functional_agp/cazy_family_damage.tsv",
-                      show_col_types = FALSE) |>
-    inner_join(sample_meta_dart, by = "sample")
-
-cazy_emi_files <- list.files("./results/functional_agp/cazy",
-                              pattern = "^cazy_emi\\.functional\\.tsv$",
-                              recursive = TRUE, full.names = TRUE)
-cazy_emi_samples <- basename(dirname(cazy_emi_files))
-
-cazy_emi_raw <- rbindlist(mapply(function(f, s) {
+build_cazy_sample <- function(sample_dir) {
+    sample <- basename(sample_dir)
+    f <- file.path(sample_dir, "cazy_emi.functional.tsv")
+    if (!file.exists(f)) return(NULL)
     d <- fread(f, showProgress = FALSE)
-    d[, sample := s]
+    d[, sample := sample]
     d
-}, cazy_emi_files, cazy_emi_samples, SIMPLIFY = FALSE), fill = TRUE) |>
+}
+
+cazy_dirs <- list.dirs("./results/functional_agp/cazy",
+                        recursive = FALSE, full.names = TRUE)
+
+cat("Building CAZy table from", length(cazy_dirs), "samples...\n")
+cazy_all <- rbindlist(lapply(cazy_dirs, build_cazy_sample), fill = TRUE) |>
     as_tibble() |>
     rename(family = function_id) |>
     inner_join(sample_meta_dart, by = "sample") |>
     select(
-        sample, family,
-        n_reads, n_ancient, n_modern, ancient_frac,
-        ci_low, ci_high, mean_posterior,
-        n_damaged_genes, damaged_gene_frac, damage_enrichment,
-        avg_identity, avg_read_length
-    )
-
-cazy_full <- cazy_dart |>
-    left_join(cazy_emi_raw, by = c("sample", "family")) |>
-    select(
         short_label, label_orig = label,
-        family, cazy_class, deg_group,
-        # Coverage + read stats
-        coverage_mean, n_reads, n_ancient, n_modern, ancient_frac,
+        family, db,
+        n_genes, n_reads, n_ancient, n_modern, ancient_frac,
         ci_low, ci_high,
-        avg_identity, avg_read_length,
-        # DART damage
-        n_proteins, n_damaged, damage_rate,
-        mean_p_damaged, mean_combined_score, mean_delta_mle, mean_d_aa,
-        # EMI posterior
-        mean_posterior, n_damaged_genes, damaged_gene_frac, damage_enrichment
+        mean_posterior, n_damaged_genes, damaged_gene_frac, damage_enrichment,
+        coverage_mean, avg_identity, avg_read_length
     )
 
-sup_table_5_s3 <- cazy_full
-sup_table_5_s4 <- cazy_full |> filter(mean_p_damaged >= 0.7)
+sup_table_5_s3 <- cazy_all
+sup_table_5_s4 <- cazy_all |> filter(mean_posterior >= 0.7)
 
 # ── Write sup_table_5 ─────────────────────────────────────────────────────────
 
@@ -132,15 +161,15 @@ addWorksheet(wb5, "S16 - CAZy authenticated")
 
 writeData(wb5, "S13 - KEGG detected",  sup_table_5_s1 |> clean_names(case = "sentence"))
 writeData(wb5, "S14 - KEGG complete",  sup_table_5_s2 |> clean_names(case = "sentence"))
-writeData(wb5, "S15 - CAZy all",           sup_table_5_s3 |> clean_names(case = "sentence"))
+writeData(wb5, "S15 - CAZy all",       sup_table_5_s3 |> clean_names(case = "sentence"))
 writeData(wb5, "S16 - CAZy authenticated", sup_table_5_s4 |> clean_names(case = "sentence"))
 
 saveWorkbook(wb5, "../supp-tab-v2/sup_table_5.xlsx", overwrite = TRUE)
 cat("Saved sup_table_5.xlsx\n")
 cat("  S13 KEGG detected:", nrow(sup_table_5_s1), "rows,", ncol(sup_table_5_s1), "cols\n")
 cat("  S14 KEGG complete:", nrow(sup_table_5_s2), "rows\n")
-cat("  S15 CAZy all:          ", nrow(sup_table_5_s3), "rows,", ncol(sup_table_5_s3), "cols\n")
-cat("  S16 CAZy authenticated:", nrow(sup_table_5_s4), "rows\n")
+cat("  S15 CAZy all:     ", nrow(sup_table_5_s3), "rows,", ncol(sup_table_5_s3), "cols\n")
+cat("  S16 CAZy auth:    ", nrow(sup_table_5_s4), "rows\n")
 
 # ── sup_table_6: Viral ────────────────────────────────────────────────────────
 
@@ -164,7 +193,9 @@ sup_table_6_s1 <- viral_emi_raw |>
            n_ancient, ancient_frac, mean_posterior, coverage_mean, avg_identity)
 
 imgvr <- fread("./data/cdata/IMGVR_all_Sequence_information-high_confidence.tsv",
-               showProgress = FALSE) |>
+               showProgress = FALSE,
+               select = c("UVIG", "Ecosystem classification",
+                          "Gene content (total genes;cds;tRNA;geNomad marker)")) |>
     clean_names() |>
     mutate(n_cds = as.integer(sub("^[^;]+;([^;]+);.*", "\\1",
         gene_content_total_genes_cds_t_rna_ge_nomad_marker))) |>
