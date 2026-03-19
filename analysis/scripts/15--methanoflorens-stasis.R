@@ -305,20 +305,20 @@ plot_fragment_lengths <- function(kapk_path, s17_path) {
     frac_lvls
   )
   # Simplified legend labels (same names as panel A, read counts in caption)
-  simple_lvls <- c("KapK-anc", "KapK-dec", "KapK-mod")
+  simple_lvls <- c("KapK-anc", "KapK-dec", "S17")
   simple_cols <- setNames(c(COL_ANCIENT, COL_MODERN, COL_RELATIVE), simple_lvls)
   frag <- frag %>%
     mutate(series = factor(
       case_when(fraction == "Ancient"         ~ "KapK-anc",
                 fraction == "Kap Kbh. modern" ~ "KapK-dec",
-                fraction == "S17 modern"      ~ "KapK-mod"),
+                fraction == "S17 modern"      ~ "S17"),
       levels = simple_lvls
     ))
   means <- means %>%
     mutate(series = factor(
       case_when(fraction == "Ancient"         ~ "KapK-anc",
                 fraction == "Kap Kbh. modern" ~ "KapK-dec",
-                fraction == "S17 modern"      ~ "KapK-mod"),
+                fraction == "S17 modern"      ~ "S17"),
       levels = simple_lvls
     ))
 
