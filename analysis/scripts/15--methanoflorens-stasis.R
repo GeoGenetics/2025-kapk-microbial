@@ -242,7 +242,7 @@ plot_fragment_lengths <- function(kapk_path, s17_path) {
   load_hist <- function(path, cols) {
     read_tsv(path, show_col_types = FALSE) %>%
       mutate(pos = (length_min + length_max) / 2) %>%
-      filter(pos >= 25, pos <= 250) %>%
+      filter(pos >= 25, pos <= 600) %>%
       select(pos, all_of(cols))
   }
 
@@ -342,7 +342,7 @@ plot_fragment_lengths <- function(kapk_path, s17_path) {
       fill   = "none",
       colour = guide_legend(override.aes = list(linewidth = 0.7, alpha = 1))
     ) +
-    scale_x_continuous(breaks = seq(50, 200, 50), limits = c(25, 250),
+    scale_x_continuous(breaks = seq(100, 600, 100), limits = c(25, 600),
                        expand = c(0.01, 0)) +
     scale_y_continuous(expand = c(0.01, 0), limits = c(0, 11.5)) +
     labs(x = "Fragment length (bp)", y = "Frequency (%)") +
