@@ -50,13 +50,13 @@ Run from the `analysis/` directory in order:
 | `04--taxonomic-profiling.R` | Main taxonomic profiling |
 | `05--sourcetracker.R` | Source tracking |
 | `06--taxonomic-mag-distribution.R` | MAG distribution analysis |
-| `07a--agp-functional.R` | DART/AGP functional profiling (KEGG + CAZy) |
-| `08d--virome-figures.R` | Viral community analysis |
+| `07--agp-functional.R` | DART/AGP functional profiling (KEGG + CAZy) |
+| `08--virome-figures.R` | Viral community analysis |
 | `09--biomarkers.R` | Lipid biomarker analysis |
 | `10--briggs.R` | Briggs damage pattern analysis |
-| `11-reextractions.R` | Re-extraction comparison |
-| `14-summary-tables.R` | Supplementary tables generation |
-| `15--methanoflorens-stasis.R` | Methanoflorens evolutionary stasis figure |
+| `11--reextractions.R` | Re-extraction comparison |
+| `12--summary-tables.R` | Supplementary tables generation |
+| `13--methanoflorens-stasis.R` | Methanoflorens evolutionary stasis figure |
 | `generate_dart_tables.R` | DART supplementary tables |
 | `generate_mag_table.R` | MAG quality table |
 | `rerender_heatmap.R` | Functional heatmap figure |
