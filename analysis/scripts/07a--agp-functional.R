@@ -216,8 +216,6 @@ load_kegg_modules <- function(kegg_dir, sample_meta) {
 #' For each (sample, module), computes mean_p_damaged by joining
 #' anvio_modules.txt gene lists with emi.protein.slim.tsv.gz damage scores.
 #'
-#' @param threshold p_protein_damaged cutoff to call a protein damaged
-#' @return data.table: sample, module, module_name, module_class, mean_p_damaged, label
 compute_kegg_damage <- function(kegg_dir, sample_meta, threshold = 0.7) {
     samples <- intersect(discover_samples(kegg_dir), sample_meta$sample)
 
@@ -276,7 +274,6 @@ load_cazy_abundances <- function(cazy_dir, sample_meta) {
 
 #' Compute per-family DART damage stats
 #'
-#' @return data.table: sample, group (family), mean, mean_p_damaged, label
 compute_cazy_damage <- function(cazy_dir, sample_meta, threshold = 0.7) {
     samples <- intersect(discover_samples(cazy_dir), sample_meta$sample)
 
@@ -347,8 +344,6 @@ load_protein_module_data <- function(kegg_dir, sample_meta) {
 #' Produces the same list structure as get_functional_info():
 #'   list(polysac_deg, central_carbon_meta, methane_metabolism, signature_modules)
 #'
-#' @param kegg_dt  data.table from load_kegg_modules() (or damage-filtered subset)
-#' @param cazy_dt  data.table from load_cazy_abundances() (or damage-filtered subset)
 build_functional_info <- function(kegg_dt, cazy_dt) {
     # Polysaccharide degradation (CAZy)
     polysac_deg <- rbind(
@@ -743,7 +738,6 @@ plot_damage_distribution <- function(prot_all_dt) {
 
 #' Load per-sample global damage score from pathway_damage_stats.tsv
 #'
-#' @return data.table: sample, label, mean_damage
 load_sample_damage_stats <- function(kegg_dir, sample_meta) {
     samples <- intersect(discover_samples(kegg_dir), sample_meta$sample)
 
@@ -768,10 +762,6 @@ load_sample_damage_stats <- function(kegg_dir, sample_meta) {
 #' correlated with that sample's mean_damage. A significant positive ρ means
 #' the module is more abundant in samples with higher ancient DNA signal.
 #'
-#' @param kegg_dt       data.table from load_kegg_modules()
-#' @param damage_stats  data.table from load_sample_damage_stats()
-#' @param module_filter optional character vector of module_names to restrict test
-#' @return data.table: module, module_name, module_class, n_samples, rho, p.value, q.value
 test_enrichment_spearman <- function(kegg_dt, damage_stats, module_filter = NULL) {
     dt <- merge(as.data.table(kegg_dt),
                 damage_stats[, .(sample, mean_damage)],
@@ -821,8 +811,6 @@ test_enrichment_spearman <- function(kegg_dt, damage_stats, module_filter = NULL
 #' Modules truly enriched in ancient organisms will have high module_ancient_frac
 #' and this should be positively correlated with global mean_damage across samples.
 #'
-#' @return data.table: sample, label, module, module_name, module_class,
-#'         sum_n_ancient, sum_n_reads, module_ancient_frac
 load_module_ancient_coverage <- function(kegg_dir, sample_meta) {
     samples <- intersect(discover_samples(kegg_dir), sample_meta$sample)
 
@@ -872,10 +860,6 @@ load_module_ancient_coverage <- function(kegg_dir, sample_meta) {
 #' Unlike test_enrichment_spearman(), this uses only ancient reads, removing the
 #' signal from living organisms that also contribute to avg_coverage.
 #'
-#' @param ancient_dt    data.table from load_module_ancient_coverage()
-#' @param damage_stats  data.table from load_sample_damage_stats()
-#' @param module_filter optional character vector of module_names to restrict test
-#' @return data.table: module, module_name, module_class, n_samples, rho, p.value, q.value
 test_enrichment_spearman_ancient <- function(ancient_dt, damage_stats, module_filter = NULL) {
     dt <- merge(as.data.table(ancient_dt),
                 damage_stats[, .(sample, mean_damage)],
@@ -973,7 +957,6 @@ plot_enrichment_lollipop <- function(enr_dt, figure_module_names = NULL, top_n =
 
 #' Load key enzyme (KO-level) ancient read data per sample
 #'
-#' @return data.table: sample, label, short_label, member_unit, site_rnk,
 #'         ko, gene, pathway, pathway_order, n_reads, n_ancient,
 #'         mean_posterior, ancient_pct
 load_key_enzyme_data <- function(kegg_dir, sample_meta,

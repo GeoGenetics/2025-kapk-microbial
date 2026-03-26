@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(janitor)
 library(ggthemr)
@@ -27,7 +26,6 @@ COLOR_MAPPING <- c(
 )
 
 #' Load and process initial data
-#' @return list containing required data frames
 load_initial_data <- function() {
     # Load metadata
     kapk_cdata <- read_tsv("./data/cdata/KapK-cdata-manuscript-20221211.tsv")
@@ -105,11 +103,6 @@ load_initial_data <- function() {
     )
 }
 #' Process taxonomic data
-#' @param tax_data_agg Aggregated taxonomy data
-#' @param tax_info Taxonomy information
-#' @param dmg_local_agg Aggregated damage data
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @return list containing processed taxonomic data
 process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_cdata_agg) {
     # Combine taxonomy and damage data
     tax_data_agg <- tax_data_agg |>
@@ -156,11 +149,6 @@ process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_c
         short_label_order = short_label_order
     )
 } #' Process taxonomic data
-#' @param tax_data_agg Aggregated taxonomy data
-#' @param tax_info Taxonomy information
-#' @param dmg_local_agg Aggregated damage data
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @return list containing processed taxonomic data
 process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_cdata_agg) {
     # Combine taxonomy and damage data
     tax_data_agg <- tax_data_agg |>
@@ -212,9 +200,6 @@ process_taxonomic_data <- function(tax_data_agg, tax_info, dmg_local_agg, kapk_c
 }
 
 #' Process genus-level data for damaged taxa
-#' @param tax_data_agg_dmg_sp Species-level damage data
-#' @param abun_thresh Abundance threshold
-#' @return list containing genus-level data
 process_genus_level_data <- function(tax_data_agg_dmg_sp, abun_thresh = ABUNDANCE_THRESHOLD) {
     # Process family level data
     tax_data_agg_family <- tax_data_agg_dmg_sp |>
@@ -255,10 +240,6 @@ process_genus_level_data <- function(tax_data_agg_dmg_sp, abun_thresh = ABUNDANC
 }
 
 #' Process tree data and save results
-#' @param dmg_genus Damaged genus data
-#' @param tree_path Path to GTDB tree
-#' @param output_path Output path for filtered tree
-#' @return Filtered tree object
 process_tree_data <- function(dmg_genus, tree_path, output_path) {
     # Read and process tree
     gtdb_tree <- read_gtdb_tree(tree_path)
@@ -278,10 +259,6 @@ process_tree_data <- function(dmg_genus, tree_path, output_path) {
 }
 
 #' Create phyloseq object
-#' @param tax_data_agg Aggregated taxonomy data
-#' @param tax_info Taxonomy information
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @return phyloseq object
 create_phyloseq_object <- function(tax_data_agg, tax_info, kapk_cdata_agg) {
     # Filter damaged taxa
     tax_filt <- tax_data_agg |>
@@ -333,10 +310,6 @@ create_phyloseq_object <- function(tax_data_agg, tax_info, kapk_cdata_agg) {
 }
 
 #' Create reference counts plot
-#' @param tax_data_agg Aggregated taxonomy data
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @param short_label_order Order of short labels
-#' @return ggplot object
 plot_reference_counts <- function(tax_data_agg, kapk_cdata_agg, short_label_order) {
     tax_data_agg |>
         select(label, reference, is_dmg) |>
@@ -368,10 +341,6 @@ plot_reference_counts <- function(tax_data_agg, kapk_cdata_agg, short_label_orde
 }
 
 #' Create dereplicated sequences plot
-#' @param derep_stats Dereplicated statistics
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @param short_label_order Order of short labels
-#' @return ggplot object
 plot_derep_seqs <- function(derep_stats, kapk_cdata_agg, short_label_order) {
     derep_stats |>
         inner_join(kapk_cdata_agg |> select(label, short_label)) |>
@@ -407,10 +376,6 @@ plot_derep_seqs <- function(derep_stats, kapk_cdata_agg, short_label_order) {
 }
 
 #' Create mapped sequences proportion plot
-#' @param derep_stats Dereplicated statistics
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @param short_label_order Order of short labels
-#' @return ggplot object
 plot_mapped_proportions <- function(derep_stats, kapk_cdata_agg, short_label_order) {
     derep_stats |>
         inner_join(kapk_cdata_agg |> select(label, short_label)) |>
@@ -445,9 +410,6 @@ plot_mapped_proportions <- function(derep_stats, kapk_cdata_agg, short_label_ord
 }
 
 #' Create domain proportions plot
-#' @param tax_data_agg_dmg_sp Species-level damage data
-#' @param short_label_order Order of short labels
-#' @return ggplot object
 plot_domain_proportions <- function(tax_data_agg_dmg_sp, short_label_order) {
     tax_props <- tax_data_agg_dmg_sp |>
         group_by(short_label, domain, site, member_unit, site_rnk, is_dmg) |>
@@ -487,11 +449,6 @@ plot_domain_proportions <- function(tax_data_agg_dmg_sp, short_label_order) {
 }
 
 #' Create HDR plots
-#' @param tax_data_agg Aggregated taxonomy data
-#' @param tax_info Taxonomy information
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @param dmg_thresholds Damage thresholds
-#' @return list of ggplot objects
 create_hdr_plots <- function(tax_data_agg, tax_info, kapk_cdata_agg, dmg_thresholds) {
     # Prepare data for HDR plots
     plot_data <- tax_data_agg |>
@@ -630,7 +587,6 @@ create_hdr_plots <- function(tax_data_agg, tax_info, kapk_cdata_agg, dmg_thresho
 }
 
 #' Main execution function
-#' @return list containing all results and plots
 main <- function() {
     # Load initial data
     data <- load_initial_data()

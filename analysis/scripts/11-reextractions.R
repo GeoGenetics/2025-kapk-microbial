@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(readxl)
 library(janitor)
@@ -9,48 +8,35 @@ library(ggpubr)
 source("libs/lib.R")
 showtext_auto()
 
-# Data Loading Functions ----
 
 #' Load sample metadata from TSV
-#' @param path Path to TSV file
-#' @return Tibble with metadata
 load_kapk_cdata <- function(path) {
     read_tsv(path, show_col_types = FALSE)
 }
 
 #' Load sample metadata from Excel (paper)
-#' @param path Path to Excel file
-#' @return Tibble with cleaned metadata
 load_kapk_cdata_paper <- function(path) {
     readxl::read_xlsx(path) %>%
         clean_names()
 }
 
 #' Load extraction metadata from Excel
-#' @param path Path to Excel file
-#' @return Tibble with cleaned extraction metadata
 load_kapk_cdata_extractions <- function(path) {
     readxl::read_xlsx(path) %>%
         clean_names()
 }
 
 #' Load initial stats from TSV
-#' @param path Path to TSV file
-#' @return Tibble with initial stats
 load_initial_stats <- function(path) {
     read_tsv(path, show_col_types = FALSE)
 }
 
 #' Load derep stats from TSV
-#' @param path Path to TSV file
-#' @return Tibble with derep stats
 load_derep_stats <- function(path) {
     read_tsv(path, show_col_types = FALSE)
 }
 
 #' Load new initial stats from multiple files
-#' @param dir Directory path containing stats files
-#' @return Tibble with combined initial stats
 load_initial_stats_new <- function(dir) {
     files <- list.files(dir, pattern = "*initial*", full.names = TRUE)
     map_dfr(files, function(X) {
@@ -62,8 +48,6 @@ load_initial_stats_new <- function(dir) {
 }
 
 #' Load new derep stats from multiple files
-#' @param dir Directory path containing stats files
-#' @return Tibble with combined derep stats
 load_derep_stats_new <- function(dir) {
     files <- list.files(dir, pattern = "*derep*", full.names = TRUE)
     map_dfr(files, function(X) {
@@ -75,8 +59,6 @@ load_derep_stats_new <- function(dir) {
 }
 
 #' Load taxonomic annotations
-#' @param path Path to taxonomy TSV file
-#' @return Tibble with parsed taxonomic data
 load_tax_info <- function(path) {
     read_tsv(path, col_names = c("reference", "tax_string"), show_col_types = FALSE) %>%
         separate(
@@ -87,8 +69,6 @@ load_tax_info <- function(path) {
 }
 
 #' Load new taxonomic data from multiple files
-#' @param dir Directory path containing taxonomy files
-#' @return Tibble with combined taxonomic data
 load_tax_data_new <- function(dir) {
     files <- list.files(dir, pattern = "*stats-filtered.tsv.gz", full.names = TRUE)
     map_dfr(files, function(X) {
@@ -100,8 +80,6 @@ load_tax_data_new <- function(dir) {
 }
 
 #' Load new damage data from multiple files
-#' @param dir Directory path containing damage files
-#' @return Tibble with combined damage data
 load_dmg_data_new <- function(dir) {
     files <- list.files(dir, pattern = "*.tp-mdmg.weight-1.csv.gz", full.names = TRUE)
     map_dfr(files, function(X) {
@@ -113,19 +91,12 @@ load_dmg_data_new <- function(dir) {
 }
 
 #' Load damage thresholds
-#' @param path Path to thresholds TSV file
-#' @return Tibble with damage thresholds
 load_dmg_thresholds <- function(path) {
     read_tsv(path, show_col_types = FALSE)
 }
 
-# Data Processing Functions ----
 
 #' Process extraction metadata
-#' @param kapk_cdata_extractions Raw extraction metadata
-#' @param kapk_cdata_paper Paper metadata
-#' @param kapk_cdata KapK metadata
-#' @return Processed extraction metadata
 process_extractions <- function(kapk_cdata_extractions, kapk_cdata_paper, kapk_cdata) {
     kapk_cdata_extractions %>%
         inner_join(
@@ -145,8 +116,6 @@ process_extractions <- function(kapk_cdata_extractions, kapk_cdata_paper, kapk_c
 }
 
 #' Process new KapK metadata
-#' @param initial_stats_new New initial stats
-#' @return Processed KapK metadata
 process_kapk_cdata_new <- function(initial_stats_new) {
     initial_stats_new %>%
         select(label) %>%
@@ -160,11 +129,6 @@ process_kapk_cdata_new <- function(initial_stats_new) {
 }
 
 #' Process extraction stats
-#' @param kapk_cdata_extractions Processed extraction metadata
-#' @param initial_stats_new New initial stats
-#' @param derep_stats_new New derep stats
-#' @param kapk_cdata_new New KapK metadata
-#' @return Tibble with extraction stats
 process_extraction_stats <- function(kapk_cdata_extractions, initial_stats_new, derep_stats_new, kapk_cdata_new) {
     kapk_cdata_extractions %>%
         inner_join(
@@ -186,11 +150,6 @@ process_extraction_stats <- function(kapk_cdata_extractions, initial_stats_new, 
 }
 
 #' Process taxonomic data
-#' @param tax_data_new New taxonomic data
-#' @param dmg_data_new New damage data
-#' @param tax_info Taxonomic annotations
-#' @param dmg_thresholds Damage thresholds
-#' @return Processed taxonomic data
 process_tax_data <- function(tax_data_new, dmg_data_new, tax_info, dmg_thresholds) {
     dmg_data <- dmg_data_new %>%
         select(label, reference = tax_id, damage, significance)
@@ -214,12 +173,6 @@ process_tax_data <- function(tax_data_new, dmg_data_new, tax_info, dmg_threshold
 }
 
 #' Process re-extraction taxonomy
-#' @param kapk_cdata_new New KapK metadata
-#' @param kapk_cdata_extractions Processed extraction metadata
-#' @param tax_data_new New taxonomic data
-#' @param tax_info Taxonomic annotations
-#' @param dmg_data_new New damage data
-#' @return Tibble with re-extraction taxonomy
 process_reextraction_taxonomy <- function(kapk_cdata_new, kapk_cdata_extractions, tax_data_new, tax_info, dmg_data_new) {
     kapk_cdata_new %>%
         inner_join(kapk_cdata_extractions %>% select(short_label, file_name), by = "file_name") %>%
@@ -231,11 +184,8 @@ process_reextraction_taxonomy <- function(kapk_cdata_new, kapk_cdata_extractions
         select(-label, -file_name)
 }
 
-# Visualization Functions ----
 
 #' Define common plotting theme
-#' @param size Text size
-#' @return ggplot theme object
 get_common_theme <- function(size = 10) {
     theme_bw() +
         theme(
@@ -247,10 +197,6 @@ get_common_theme <- function(size = 10) {
 }
 
 #' Plot re-extraction proportions
-#' @param tax_data Processed taxonomic data
-#' @param kapk_cdata_new New KapK metadata
-#' @param kapk_cdata_extractions Processed extraction metadata
-#' @return ggplot object
 plot_reextraction_proportions <- function(tax_data, kapk_cdata_new, kapk_cdata_extractions) {
     tax_data %>%
         inner_join(kapk_cdata_new, by = "label") %>%
@@ -273,10 +219,8 @@ plot_reextraction_proportions <- function(tax_data, kapk_cdata_new, kapk_cdata_e
         get_common_theme()
 }
 
-# Main Execution Function ----
 
 #' Main execution function
-#' @return List containing results and plots
 main <- function() {
     # Load metadata
     kapk_cdata <- load_kapk_cdata("./data/cdata/KapK-cdata-manuscript-20221211.tsv")

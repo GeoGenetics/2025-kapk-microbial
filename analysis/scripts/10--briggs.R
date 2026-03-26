@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(ggdensity)
 library(showtext)
@@ -9,11 +8,8 @@ library(ggpubr)
 source("./libs/lib.R")
 showtext_auto()
 
-# Data Loading Functions ----
 
 #' Load read identities data
-#' @param path Path to CSV file with read identities
-#' @return Tibble with read identities
 load_read_ids <- function(path) {
     read_csv(path, col_names = c("read_name", "read_length", "percid"), show_col_types = FALSE) %>
         mutate(percid = percid / 100) %>
@@ -21,9 +17,6 @@ load_read_ids <- function(path) {
 }
 
 #' Load Briggs data
-#' @param eps Vector of epsilon values
-#' @param base_path Base directory path for Briggs files
-#' @return Tibble with combined Briggs data
 load_briggs_data <- function(eps, base_path) {
     map_dfr(eps, function(ep) {
         read_tsv(paste0(base_path, ep, ".sorted.briggs.tsv"),
@@ -36,11 +29,8 @@ load_briggs_data <- function(eps, base_path) {
         summarise(prob_ancient = mean(prob_ancient), prob_dmg = mean(prob_dmg), .groups = "drop")
 }
 
-# Data Processing Functions ----
 
 #' Process read identities and thresholds
-#' @param read_ids Read identities data
-#' @return List containing processed read_ids, mode, filter, and removed reads
 process_read_ids <- function(read_ids) {
     rl_mode <- estimate_mode(read_ids$read_length[read_ids$class == "identical"])
     rl_filter <- round(rl_mode + 5)
@@ -51,11 +41,6 @@ process_read_ids <- function(read_ids) {
 }
 
 #' Process combined data with ancient classification
-#' @param briggs_data Briggs data
-#' @param read_ids Read identities data
-#' @param reads_removed Removed reads data
-#' @param an_threshold_pa Ancient probability threshold
-#' @return Processed data with ancient classification
 process_combined_data <- function(briggs_data, read_ids, reads_removed, an_threshold_pa) {
     data <- briggs_data %> inner_join(read_ids, by = "read_name")
     data_mod <- data %>
@@ -69,8 +54,6 @@ process_combined_data <- function(briggs_data, read_ids, reads_removed, an_thres
 }
 
 #' Calculate ancient thresholds from HDR plots
-#' @param plot ggplot object from geom_hdr
-#' @return List of threshold values
 calculate_ancient_thresholds <- function(plot) {
     pg <- ggplot_build(plot)
     df <- pg$data[[1]] %>
@@ -92,11 +75,8 @@ calculate_ancient_thresholds <- function(plot) {
     list(an_threshold_x = an_threshold_x, an_threshold_pa = an_threshold_pa, plot_data = pg)
 }
 
-# Visualization Functions ----
 
 #' Define common plotting theme
-#' @param size Text size
-#' @return ggplot theme object
 get_common_theme <- function(size = 12) {
     theme_bw() +
         theme(
@@ -110,10 +90,6 @@ get_common_theme <- function(size = 12) {
 }
 
 #' Plot read length density by class (initial)
-#' @param read_ids Read identities data
-#' @param rl_mode Mode of identical read lengths
-#' @param rl_filter Filter threshold for read lengths
-#' @return ggplot object
 plot_rl_density_initial <- function(read_ids, rl_mode, rl_filter) {
     id_colors <- c("#4B878BFF", "#D01C1FFF")
     names(id_colors) <- c("not-identical", "identical")
@@ -131,9 +107,6 @@ plot_rl_density_initial <- function(read_ids, rl_mode, rl_filter) {
 }
 
 #' Plot read length density by class (filtered)
-#' @param read_ids Read identities data
-#' @param rl_filter Filter threshold for read lengths
-#' @return ggplot object
 plot_rl_density_filtered <- function(read_ids, rl_filter) {
     read_ids %>
         filter(class != "identical") %>
@@ -147,9 +120,6 @@ plot_rl_density_filtered <- function(read_ids, rl_filter) {
 }
 
 #' Plot probability of damage vs ancient
-#' @param data Combined data
-#' @param an_threshold_pa Ancient probability threshold
-#' @return ggplot object
 plot_prob_dmg_vs_ancient <- function(data, an_threshold_pa) {
     data %>
         ggplot(aes(x = prob_dmg, y = prob_ancient)) +
@@ -162,9 +132,6 @@ plot_prob_dmg_vs_ancient <- function(data, an_threshold_pa) {
 }
 
 #' Plot read length vs ancient probability
-#' @param data Combined data
-#' @param an_threshold_pa Ancient probability threshold
-#' @return ggplot object
 plot_rl_vs_ancient <- function(data, an_threshold_pa) {
     data %>
         ggplot(aes(x = read_length, y = prob_ancient)) +
@@ -177,8 +144,6 @@ plot_rl_vs_ancient <- function(data, an_threshold_pa) {
 }
 
 #' Plot read length letter-value plot
-#' @param data_mod Modified data with ancient classification
-#' @return ggplot object
 plot_rl_lv <- function(data_mod) {
     g_colors <- c("#F2B705", "#1C7085")
     names(g_colors) <- c("Pioneer", "Permafrost")
@@ -193,8 +158,6 @@ plot_rl_lv <- function(data_mod) {
 }
 
 #' Plot percid letter-value plot
-#' @param data_mod Modified data with ancient classification
-#' @return ggplot object
 plot_percid_lv <- function(data_mod) {
     g_colors <- c("#F2B705", "#1C7085")
     names(g_colors) <- c("Pioneer", "Permafrost")
@@ -210,8 +173,6 @@ plot_percid_lv <- function(data_mod) {
 }
 
 #' Plot read length vs percid by group
-#' @param data_mod Modified data with ancient classification
-#' @return ggplot object
 plot_rl_vs_percid_by_group <- function(data_mod) {
     ggplot(data_mod, aes(read_length, percid, fill = group)) +
         geom_hdr() +
@@ -220,8 +181,6 @@ plot_rl_vs_percid_by_group <- function(data_mod) {
 }
 
 #' Plot percid histogram by group
-#' @param data_mod Modified data with ancient classification
-#' @return ggplot object
 plot_percid_histogram_by_group <- function(data_mod) {
     g0 <- data_mod %> filter(group == "group0")
     g1 <- data_mod %> filter(group == "group1")
@@ -237,8 +196,6 @@ plot_percid_histogram_by_group <- function(data_mod) {
 }
 
 #' Plot percid histogram by ancient status
-#' @param data_mod Modified data with ancient classification
-#' @return ggplot object
 plot_percid_histogram_by_ancient <- function(data_mod) {
     g_colors <- c("#F2B705", "#1C7085")
     names(g_colors) <- c("Pioneer", "Permafrost")
@@ -253,8 +210,6 @@ plot_percid_histogram_by_ancient <- function(data_mod) {
 }
 
 #' Plot read length histogram
-#' @param read_ids Read identities data
-#' @return ggplot object
 plot_rl_histogram <- function(read_ids) {
     bins <- nclass.Sturges(read_ids$read_length)
     read_ids %>
@@ -267,9 +222,6 @@ plot_rl_histogram <- function(read_ids) {
 }
 
 #' Plot SNV bar chart
-#' @param snv_data SNV data tibble
-#' @param title Plot title
-#' @return ggplot object
 plot_snv_barchart <- function(snv_data, title = "") {
     ggplot() +
         geom_col(data = snv_data %> filter(trimmed == "Full read"), aes(x = group, y = snv), fill = "#EAEAEA") +
@@ -281,10 +233,8 @@ plot_snv_barchart <- function(snv_data, title = "") {
         get_common_theme()
 }
 
-# Main Execution Function ----
 
 #' Main execution function
-#' @return List containing results and plots
 main <- function() {
     # Load data
     read_ids <- load_read_ids("./data/briggs/3e3ce8e9f7___c_000000000001--percid.csv.gz")

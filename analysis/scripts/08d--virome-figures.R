@@ -7,7 +7,7 @@
 #   fig_virome_ecosystem     — DART damage by IMGVR ecosystem of origin
 #
 # Data source: results/virome_agp/functional/{sample}/viral_emi.functional.tsv
-# Filtering  : rank filter (prot_coverage >= 0.20, n_genes > 1 or Cressdna)
+# Filtering  : viral-auth Poisson FDR (qvalue <= 0.05, per sample)
 #              domain == d__Viruses, phylum in vir_phyla
 
 library(tidyverse)
@@ -51,20 +51,29 @@ ECO_BROAD_COLORS <- c(
     "Marine"          = "#1A5276",
     "Terrestrial"     = "#7A9E67",
     "Host-associated" = "#D4856A",
-    "Saline/Thermal"  = "#E2C05A",
+    "Saline/Alkaline" = "#E2C05A",
+    "Thermal"         = "#E87D30",
+    "Sediment"        = "#8B7355",
+    "Engineered"      = "#7B6E8F",
     "Unclassified"    = "#C8C8C8"
 )
 ECO_BROAD_LEVELS <- names(ECO_BROAD_COLORS)
 
 map_ecosystem_broad <- function(eco) {
     dplyr::case_when(
-        is.na(eco) | eco == ";;;"                                  ~ "Unclassified",
-        grepl("Aquatic;Freshwater|Aquatic;Floodplain|Deep subsurface;Groundwater", eco) ~ "Freshwater",
-        grepl("Aquatic;Marine|Aquatic;Oceanic",                    eco) ~ "Marine",
-        grepl("Terrestrial;",                                      eco) ~ "Terrestrial",
-        grepl("Host-associated",                                   eco) ~ "Host-associated",
-        grepl("Non-marine Saline|Hypersaline|Thermal springs",     eco) ~ "Saline/Thermal",
-        TRUE                                                            ~ "Unclassified"
+        is.na(eco) | eco == ";;;" | eco == ""                           ~ "Unclassified",
+        grepl("Freshwater|Floodplain|Groundwater",    eco, ignore.case=TRUE) ~ "Freshwater",
+        grepl("Aquatic;Thermal|Thermal springs|Hot spring|Hydrothermal|Tepid",
+              eco, ignore.case=TRUE)                                         ~ "Thermal",
+        grepl("Marine|Oceanic|Intertidal",            eco, ignore.case=TRUE) ~ "Marine",
+        grepl("Terrestrial|Soil",                     eco, ignore.case=TRUE) ~ "Terrestrial",
+        grepl("Host-associated",                      eco, ignore.case=TRUE) ~ "Host-associated",
+        grepl("Non-marine Saline|Hypersaline|Saline|Alkaline",
+              eco, ignore.case=TRUE)                                         ~ "Saline/Alkaline",
+        grepl("Sediment|Deep subsurface",             eco, ignore.case=TRUE) ~ "Sediment",
+        grepl("Engineered|Bioreactor|Wastewater|Landfill",
+              eco, ignore.case=TRUE)                                         ~ "Engineered",
+        TRUE                                                                 ~ "Unclassified"
     )
 }
 
@@ -138,30 +147,85 @@ load_emi_functional <- function(functional_dir, valid_samples) {
 
 
 # =============================================================================
-# Filtering (identical to 08c)
+# Filtering: viral-auth Poisson FDR
 # =============================================================================
 
-apply_rank_filter <- function(emi_data, imgvr) {
-    dt <- merge(emi_data, imgvr[, .(uvig, n_cds)],
-                by.x = "reference", by.y = "uvig", all.x = TRUE)
 
-    # IMGVR references: standard prot_coverage rank filter
-    imgvr_dt <- dt[!is.na(n_cds) & n_cds > 0]
-    imgvr_dt[, prot_coverage := n_genes / n_cds]
-    imgvr_dt[, rank := fcase(
-        prot_coverage >= 0.25 & n_genes > 1,                        "green",
-        prot_coverage >= 0.2 & prot_coverage < 0.25 & n_genes > 1,  "yellow",
-        n_genes == 1 & prot_coverage >= 0.2,                         "grey",
-        default = "red"
-    )]
-    imgvr_dt <- imgvr_dt[rank %in% c("green", "yellow", "grey")]
+apply_viral_auth_filter <- function(emi_data, viral_auth_path,
+                                     vir_ncds_path  = "./data/cdata/vir_ncds.tsv",
+                                     vir_qc_path    = "./data/cdata/vir_gene_qc.tsv",
+                                     tier1_fdr      = 0.02,   # IMGVR global DBH threshold
+                                     fdr_threshold  = 0.05,   # vir* targeted BH threshold
+                                     min_start_div  = 0.3,
+                                     min_pos_score  = 0.5,
+                                     min_entropy    = 0.3) {   # entropy positional entropy gate
+    va <- fread(viral_auth_path, showProgress = FALSE)
 
-    # Custom vir* references (not in IMGVR): keep all with n_genes >= 1
-    vir_dt <- dt[is.na(n_cds) & grepl("^vir", reference)]
-    vir_dt[, prot_coverage := NA_real_]
-    vir_dt[, rank := fifelse(n_genes > 1, "green", "grey")]
+    # ── Tier 1: IMGVR refs — q-values from viral-auth (DBH in C++) ───────────
+    # Discrete BH (DBH, Döhler et al. 2018) is implemented in viral-auth.cpp.
+    # The qvalue column in viral_auth.per_sample.tsv uses DBH q-values, which
+    # have more power for small-genome refs (Cressdnaviricota) than standard BH.
+    # Two-stage detection rule (GPT-5.4 recommendation):
+    #   1. DBH count test: qvalue <= tier1_fdr  (inferential, FDR-controlled)
+    #   2. Entropy QC: entropy >= min_entropy  (orthogonal anti-cross-mapping filter)
+    # Entropy is NOT folded into the p-value — that would invalidate the DBH guarantee.
+    # Final calls: "DBH-significant AND passing spatial coverage QC."
+    imgvr_sig <- va[!grepl("^vir", reference) & qvalue <= tier1_fdr &
+                    (entropy < 0 | entropy >= min_entropy)]
+    cat(sprintf("  Tier 1 (DBH q≤%.2f + entropy≥%.2f): %d ref×sample pairs\n",
+                tier1_fdr, min_entropy, nrow(imgvr_sig)))
 
-    rbind(imgvr_dt, vir_dt, fill = TRUE)
+    # ── Tier 2: targeted BH-FDR for the pre-defined vir* archaeal virus panel ─
+    # vir* is a fixed a-priori set of 193 methanogenic archaeal virus references.
+    # Running BH over this panel only (not mixed with 18k IMGVR refs) is
+    # statistically defensible and avoids paying the multiplicity cost of the
+    # untargeted screen. Undetected refs (0 reads) are included as p=1 so we do
+    # not post-select on observed hits (per Boca & Leek / GPT-5.4 advice).
+    all_vir_refs <- fread(vir_ncds_path, col.names = c("reference", "n_cds"),
+                          showProgress = FALSE)$reference
+    all_samples  <- unique(va$sample)
+
+    # Full grid: every sample × every vir* ref; missing = not detected → p=1
+    vir_grid <- CJ(sample = all_samples, reference = all_vir_refs)
+    va_vir   <- va[grepl("^vir", reference)]
+    vir_grid <- merge(vir_grid, va_vir, by = c("sample", "reference"), all.x = TRUE)
+    vir_grid[is.na(pvalue), pvalue := 1.0]
+
+    # BH correction per sample over all 193 vir* refs
+    vir_grid[, vir_qvalue := p.adjust(pvalue, method = "BH"), by = sample]
+
+    # Positional QC gate: ancient DNA reads should have diverse start positions,
+    # not pile on a single conserved locus (cross-mapping artifact).
+    # Per-gene thresholds (GPT-5.4 recommendation, validated on vir079/vir047 vs vir116/vir192):
+    #   min(start_diversity) > 0.3  — reads come from distinct molecules
+    #   min(positional_score) > 0.5 — reads spread across the gene, not one hotspot
+    vir_qc <- fread(vir_qc_path,
+                    col.names = c("sample","reference","qc_start_div","qc_pos_score"),
+                    showProgress = FALSE)
+    vir_grid <- merge(vir_grid, vir_qc, by = c("sample","reference"), all.x = TRUE)
+    # Validate QC coverage: every detected vir* ref (n_genes≥1) must have a QC row.
+    # Missing QC = not validated = must fail. Warn if QC file is incomplete.
+    detected_vir <- va_vir[n_genes >= 1L, unique(paste(sample, reference))]
+    qc_covered   <- vir_qc[, unique(paste(sample, reference))]
+    uncovered    <- setdiff(detected_vir, qc_covered)
+    if (length(uncovered) > 0)
+        warning(sprintf("%d detected vir* ref×sample pairs lack QC rows — they will be excluded. Regenerate vir_gene_qc.tsv.",
+                        length(uncovered)))
+    # Missing QC (NA) must FAIL — a ref not in vir_gene_qc.tsv has not been validated
+    # and must not bypass the cross-mapping safeguard. Only detected refs with explicit
+    # QC rows passing both thresholds are accepted.
+    vir_sig <- vir_grid[vir_qvalue <= fdr_threshold & !is.na(n_genes) &
+                         !is.na(qc_start_div) &
+                         qc_start_div > min_start_div & qc_pos_score > min_pos_score]
+    vir_sig[, qvalue := vir_qvalue]
+    vir_sig[, c("vir_qvalue","qc_start_div","qc_pos_score") := NULL]
+
+    cat(sprintf("  Tier 2 (targeted BH + positional QC, vir*): %d ref×sample pairs (%d unique refs)\n",
+                nrow(vir_sig), uniqueN(vir_sig$reference)))
+
+    out <- rbind(imgvr_sig, vir_sig, fill = TRUE)
+    out[, rank := "green"]
+    out
 }
 
 
@@ -194,7 +258,14 @@ plot_composition <- function(dat, sample_order, phyla_order) {
     # Use same order as bottom panels (by n_ref count)
     phyla_labels_ordered <- PHYLA_LABELS[phyla_order]
 
-    comp <- dat[, .(n_reads = sum(n_reads)), by = .(short_label, member_unit, phylum)]
+    # Accept either raw per-ref data (sum reads_norm) or pre-aggregated comp data
+    if ("reads_norm" %in% names(dat) && !("reference" %in% names(dat))) {
+        # Pre-aggregated: comp_data already has reads_norm per (short_label, member_unit, phylum)
+        comp <- copy(dat)
+        setnames(comp, "reads_norm", "n_reads")
+    } else {
+        comp <- dat[, .(n_reads = sum(reads_norm)), by = .(short_label, member_unit, phylum)]
+    }
     comp[, total := sum(n_reads), by = .(short_label)]
     comp[, prop  := n_reads / total]
 
@@ -226,7 +297,7 @@ plot_composition <- function(dat, sample_order, phyla_order) {
             panel.grid.major.y = element_blank(),
             panel.grid.major.x = element_blank()
         ) +
-        labs(x = NULL, y = "Relative read abundance")
+        labs(x = NULL, y = "Relative abundance")
 }
 
 
@@ -238,7 +309,7 @@ plot_ecosystem_composition <- function(dat, sample_order) {
     comp <- as_tibble(dat) |>
         mutate(eco_broad = map_ecosystem_broad(ecosystem)) |>
         group_by(short_label, member_unit, eco_broad) |>
-        summarise(n_reads = sum(n_reads), .groups = "drop") |>
+        summarise(n_reads = sum(reads_norm), .groups = "drop") |>
         group_by(short_label) |>
         mutate(total = sum(n_reads), prop = n_reads / total) |>
         ungroup() |>
@@ -272,7 +343,7 @@ plot_ecosystem_composition <- function(dat, sample_order) {
             panel.grid.major.y = element_blank(),
             panel.grid.major.x = element_blank()
         ) +
-        labs(x = NULL, y = "Relative read abundance")
+        labs(x = NULL, y = "Relative abundance")
 }
 
 
@@ -303,10 +374,14 @@ plot_phyla_stats <- function(dat, phyla_order) {
             member_unit  = factor(member_unit, levels = c("B1", "B2", "B3"))
         )
 
-    # p_nref: one point per sample × phylum — shows inter-sample variation
+    # p_nref: one point per sample × phylum — shows inter-sample variation.
+    # Complete missing sample/phylum combinations with 0 so medians are not
+    # biased upward by dropping samples where a phylum was absent.
     nref_dat <- base |>
         group_by(sample, member_unit, phylum_label) |>
-        summarise(n_ref = n_distinct(reference), .groups = "drop")
+        summarise(n_ref = n_distinct(reference), .groups = "drop") |>
+        complete(nesting(sample, member_unit), phylum_label,
+                 fill = list(n_ref = 0L))
 
     p_nref <- ggplot(nref_dat, aes(y = phylum_label, x = n_ref, colour = member_unit)) +
         geom_point(alpha = 0.7, size = 1.1,
@@ -331,6 +406,7 @@ plot_phyla_stats <- function(dat, phyla_order) {
         labs(y = NULL, x = "Unique viral refs.")
 
     # p_iden: violin per phylum, coloured by phylum — shows AA identity distribution
+    # Phyla with n=1 (e.g. Cressdnaviricota) show only the median white dot.
     p_iden <- base |>
         ggplot(aes(y = phylum_label, x = avg_identity * 100,
                    fill = phylum_label, colour = phylum_label)) +
@@ -357,9 +433,9 @@ plot_phyla_stats <- function(dat, phyla_order) {
                      size = 1.8, fill = "white", colour = "grey20", stroke = 0.5) +
         scale_fill_manual(values   = phyla_fills, guide = "none") +
         scale_colour_manual(values = phyla_fills, guide = "none") +
-        coord_cartesian(xlim = c(0.85, 1.02)) +
+        coord_cartesian(xlim = c(0.70, 1.02)) +
         scale_x_continuous(labels = scales::percent_format(accuracy = 1),
-                           breaks = c(0.85, 0.9, 0.95, 1.0)) +
+                           breaks = c(0.70, 0.80, 0.90, 1.0)) +
         theme_nature() + y_hidden +
         labs(y = NULL, x = "Protein damage probability")
 
@@ -381,8 +457,11 @@ assemble_phyla_row <- function(phyla_list) {
 # Combined: composition (top) + phyla stats 3 panels (bottom)
 # =============================================================================
 
-plot_combined <- function(dat, sample_order, phyla_order) {
-    p_comp  <- plot_composition(dat, sample_order, phyla_order) + labs(tag = "A") +
+plot_combined <- function(dat, sample_order, phyla_order, comp_dat = NULL) {
+    # comp_dat: optional pre-aggregated composition data (e.g. RPKM-normalised);
+    # if NULL, composition is computed from dat (individual-ref data).
+    comp_src <- if (!is.null(comp_dat)) comp_dat else dat
+    p_comp  <- plot_composition(comp_src, sample_order, phyla_order) + labs(tag = "A") +
                    theme(plot.tag = element_text(size = 11, face = "bold"))
     p_eco   <- plot_ecosystem_composition(dat, sample_order) + labs(tag = "C") +
                    theme(plot.tag = element_text(size = 11, face = "bold"))
@@ -441,7 +520,7 @@ plot_ecosystem <- function(dat, ecosystems) {
 # =============================================================================
 
 plot_streamgraph <- function(dat, sample_order) {
-    comp <- dat[, .(n_reads = sum(n_reads)), by = .(short_label, member_unit, phylum)]
+    comp <- dat[, .(n_reads = sum(reads_norm)), by = .(short_label, member_unit, phylum)]
     comp[, total := sum(n_reads), by = short_label]
     comp[, prop  := n_reads / total]
 
@@ -489,7 +568,7 @@ plot_streamgraph <- function(dat, sample_order) {
             legend.text        = element_text(size = 5.5),
             legend.margin      = margin(0, 0, 0, 0)
         ) +
-        labs(x = NULL, y = "Relative read abundance")
+        labs(x = NULL, y = "Relative abundance")
 }
 
 
@@ -500,7 +579,7 @@ plot_streamgraph <- function(dat, sample_order) {
 plot_lollipop <- function(dat) {
     samp_units <- unique(dat[, .(short_label, member_unit)])
 
-    comp <- dat[, .(n_reads = sum(n_reads)), by = .(short_label, phylum)]
+    comp <- dat[, .(n_reads = sum(reads_norm)), by = .(short_label, phylum)]
     comp[, total := sum(n_reads), by = short_label]
     comp[, prop  := n_reads / total]
 
@@ -542,7 +621,7 @@ plot_lollipop <- function(dat) {
             legend.key.size    = unit(2, "mm"),
             legend.text        = element_text(size = 5.5)
         ) +
-        labs(x = NULL, y = "Relative read abundance")
+        labs(x = NULL, y = "Relative abundance")
 }
 
 
@@ -558,7 +637,7 @@ plot_integrated <- function(dat, sample_order) {
     ddt[, short_label := factor(short_label, levels = samp_levels)]
     ddt[, member_unit := factor(member_unit, levels = unit_levels)]
 
-    comp <- ddt[, .(n_reads = sum(n_reads)), by = .(short_label, member_unit, phylum)]
+    comp <- ddt[, .(n_reads = sum(reads_norm)), by = .(short_label, member_unit, phylum)]
     comp[, total        := sum(n_reads), by = short_label]
     comp[, prop         := n_reads / total]
     comp[, phylum_label := factor(PHYLA_LABELS[phylum], levels = PHYLA_LABELS)]
@@ -609,7 +688,7 @@ plot_integrated <- function(dat, sample_order) {
             legend.margin      = margin(0, 0, 0, 2),
             plot.margin        = margin(4, 2, 4, 0)
         ) +
-        labs(y = NULL, x = "Relative read abundance")
+        labs(y = NULL, x = "Relative abundance")
 
     ggpubr::ggarrange(p_side, p_bars, ncol = 2, align = "hv",
                       widths = c(0.12, 1))
@@ -734,8 +813,9 @@ plot_virome_panel <- function(dat, sample_order, phyla_order, ecosystems) {
 # =============================================================================
 
 main <- function(
-    functional_dir = "./results/virome_agp/functional",
-    output_dir     = "./results/virome_agp"
+    functional_dir  = "./results/virome_agp/functional",
+    viral_auth_path = "./results/virome_agp/viral_auth.per_sample.tsv",
+    output_dir      = "./results/virome_agp"
 ) {
     # ---- Metadata -----------------------------------------------------------
     kapk_cdata    <- load_metadata("./data/cdata/KapK-cdata-manuscript-20221211.tsv")
@@ -763,7 +843,18 @@ main <- function(
     cat("  Raw:", nrow(emi_data), "ref×sample pairs,",
         uniqueN(emi_data$sample), "samples\n")
 
-    emi_filt <- apply_rank_filter(emi_data, imgvr)
+    # Consistency check: viral_auth_path must cover the same samples as functional_dir.
+    # apply_viral_auth_filter() uses viral_auth_path as source of truth, not emi_data.
+    # A stale viral_auth file would silently produce plots for a different sample set.
+    va_samples <- unique(fread(viral_auth_path, select = "sample",
+                                showProgress = FALSE)$sample)
+    emi_samples <- unique(emi_data$sample)
+    missing_in_va <- setdiff(emi_samples, va_samples)
+    if (length(missing_in_va) > 0)
+        stop(sprintf("viral_auth_path is stale: missing %d sample(s) from functional_dir: %s\n  Rerun viral-auth before plotting.",
+                     length(missing_in_va), paste(missing_in_va, collapse=", ")))
+
+    emi_filt <- apply_viral_auth_filter(emi_data, viral_auth_path)
 
     # Join taxonomy — all.x = TRUE keeps custom vir* refs (not in tax_info)
     dat <- merge(emi_filt, tax_info[, .(reference, domain, phylum)],
@@ -775,29 +866,69 @@ main <- function(
     dat <- merge(dat, imgvr[, .(uvig, ecosystem)],
                  by.x = "reference", by.y = "uvig", all.x = TRUE)
 
-    # Promote Cressdna grey → blue, drop remaining grey (IMGVR refs only)
-    dat[rank == "grey" & phylum == "p__Cressdnaviricota", rank := "blue"]
+    # All refs (including vir*) now go through viral-auth; grey rank is unused
     dat <- dat[rank != "grey"]
 
     # Classify custom vir* references (same logic as 08--virome.R):
-    #   vir291/vir303 → p__Uroviricota (Caudoviricetes)
-    #   all other vir* → "Methanogenic viruses"
+    #   all vir* → "Methanogenic viruses" (all are custom archaeal virus refs,
+    #   including vir291/vir303 = Caudoviricetes infecting Methanosarcinales)
     dat[is.na(domain), domain := "d__Viruses"]
-    dat[reference %in% c("vir291", "vir303"), phylum := "p__Uroviricota"]
     dat[is.na(phylum) & grepl("^vir", reference), phylum := "Methanogenic viruses"]
 
     # DART authentication filter: only references where reads authenticate as ancient
-    dat_filt <- dat[rank %in% c("green", "yellow", "blue") &
+    # (used for individual-ref plots: identity, damage, n_refs)
+    dat_filt <- dat[rank %in% c("green", "grey", "blue") &
                     phylum %in% vir_phyla &
                     mean_posterior >= 0.7]
-    cat("  After filter:", nrow(dat_filt), "ref×sample pairs,",
+    cat("  After filter (individual refs):", nrow(dat_filt), "ref×sample pairs,",
         uniqueN(dat_filt$reference), "unique UViGs,",
         uniqueN(dat_filt$sample), "samples\n")
 
-    # Phyla order (by n unique references)
+    # Phyla order (by n unique references in individually-significant set)
     phyla_order <- dat_filt[, .(n = uniqueN(reference)), by = phylum][
         order(-n), phylum]
     cat("  Phyla:", paste(gsub("p__", "", phyla_order), collapse = ", "), "\n")
+
+    # ── CDS aa lookup (for fallback genome-length estimation) ─────────────────
+    imgvr_aa  <- fread("./data/cdata/imgvr_cds_aa.tsv",
+                       col.names = c("reference", "total_cds_aa"), showProgress = FALSE)
+    vir_aa    <- fread("./data/cdata/archaeal_cds_aa.tsv",
+                       col.names = c("reference", "total_cds_aa"), showProgress = FALSE)
+    vir_aa    <- vir_aa[grepl("^vir", reference)]
+    cds_aa_lut <- rbind(imgvr_aa, vir_aa)
+
+    # ── Genome length in nt lookup ─────────────────────────────────────────────
+    # IMGVR: actual genome length (bp) from sequence info table.
+    # vir*:  total_cds_aa × 3 (nt) — archaeal virus genomes are highly gene-dense.
+    imgvr_nt <- fread("./data/cdata/IMGVR_all_Sequence_information-high_confidence.tsv",
+                      select = c("UVIG", "Length"), showProgress = FALSE) |>
+        setnames(c("reference", "genome_nt"))
+    vir_nt   <- vir_aa[, .(reference, genome_nt = total_cds_aa * 3L)]
+    genome_nt_lut <- rbind(imgvr_nt, vir_nt[, .(reference, genome_nt)])
+
+    # Composition: n_ancient / genome_nt × 1e6
+    # = authenticated ancient reads per million nucleotides of genome (coverage metric).
+    # Genome-normalised: accounts for genome size so large genomes are not over-represented.
+    # Database is dereplicated (derepG): each ref = one distinct viral genome cluster.
+    dat_filt <- merge(dat_filt, cds_aa_lut, by = "reference", all.x = TRUE)
+    dat_filt[is.na(total_cds_aa), total_cds_aa := n_cds * 300L]
+    dat_filt[total_cds_aa == 0L,  total_cds_aa := n_genes * 300L]
+    dat_filt <- merge(dat_filt, genome_nt_lut, by = "reference", all.x = TRUE)
+    dat_filt[is.na(genome_nt), genome_nt := total_cds_aa * 3L]  # fallback
+    dat_filt[genome_nt == 0L,  genome_nt := total_cds_aa * 3L]
+    # n_ancient from emi_data (DART EM authenticated reads, more accurate than proxy).
+    n_anc_lut <- emi_data[, .(reference, sample, n_ancient)]
+    dat_filt   <- merge(dat_filt, n_anc_lut, by = c("reference","sample"), all.x = TRUE)
+    dat_filt[is.na(n_ancient), n_ancient := n_reads * ancient_frac]  # fallback
+    dat_filt[n_ancient > n_reads, n_ancient := n_reads]              # EM numerical cap
+    dat_filt[, reads_norm := n_ancient / genome_nt * 1e6]
+
+    comp_data <- dat_filt[, .(reads_norm = sum(reads_norm)), by = .(short_label, member_unit, phylum)]
+    comp_data[, short_label := factor(short_label, levels = sample_order)]
+    comp_data[, member_unit := factor(member_unit, levels = UNIT_LEVELS)]
+    phyla_order_comp <- comp_data[, .(s = sum(reads_norm)), by = phylum][order(-s), phylum]
+    cat(sprintf("  Composition phyla: %s\n",
+                paste(gsub("p__","",phyla_order_comp), collapse=", ")))
 
     # ---- Figures ------------------------------------------------------------
     dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -812,7 +943,8 @@ main <- function(
 
     # Individual figures (kept for supplementary)
     cat("Plotting composition...\n")
-    p_comp <- plot_composition(dat_filt, sample_order, phyla_order)
+    # Composition uses phylum-level Fisher-aggregated data (all refs per sig phylum)
+    p_comp <- plot_composition(comp_data, sample_order, phyla_order_comp)
     save_fig(p_comp, "fig_virome_composition", 183, 68)
 
     cat("Plotting phyla stats...\n")
@@ -821,7 +953,7 @@ main <- function(
     save_fig(p_phyla_combined, "fig_virome_phyla", 183, 85)
 
     cat("Plotting combined composition+phyla figure...\n")
-    p_combined <- plot_combined(dat_filt, sample_order, phyla_order)
+    p_combined <- plot_combined(dat_filt, sample_order, phyla_order_comp, comp_dat = comp_data)
     save_fig(p_combined, "fig_virome_combined", 183, 165)
 
     cat("Plotting ecosystem origin...\n")
@@ -845,6 +977,41 @@ main <- function(
     save_fig(p_lollipop, "fig_virome_lollipop", 75, 60)
 
     cat("Done.\n")
+
+    # ── Print stats for results section ──────────────────────────────────────
+    cat("\n=== Stats for results section ===\n")
+    cat("Total unique refs:", uniqueN(dat_filt$reference), "\n\n")
+
+    cat("Refs by phylum:\n")
+    print(dat_filt[, .(n_refs = uniqueN(reference)), by = phylum][order(-n_refs)])
+
+    cat("\nLength-normalised % by phylum x unit:\n")
+    # Sum unique genome counts per phylum per unit (summing across samples within unit)
+    # Sum TPM across samples within unit; proportions computed across phyla per unit
+    comp_stats <- comp_data[, .(s = sum(reads_norm)), by = .(member_unit, phylum)]
+    comp_stats[, pct := round(100 * s / sum(s), 1), by = member_unit]
+    print(comp_stats[order(member_unit, -pct)])
+
+    cat("\nmean_posterior by phylum (%):\n")
+    print(dat_filt[, .(
+        med = round(median(mean_posterior) * 100, 1),
+        q25 = round(quantile(mean_posterior, 0.25) * 100, 1),
+        q75 = round(quantile(mean_posterior, 0.75) * 100, 1)
+    ), by = phylum][order(-med)])
+
+    cat("\navg_identity by phylum (%):\n")
+    print(dat_filt[, .(
+        med = round(median(avg_identity, na.rm = TRUE) * 100, 1),
+        q25 = round(quantile(avg_identity, 0.25, na.rm = TRUE) * 100, 1),
+        q75 = round(quantile(avg_identity, 0.75, na.rm = TRUE) * 100, 1)
+    ), by = phylum][order(-med)])
+
+    cat("\nEcosystem (length-norm reads %) by unit:\n")
+    eco_class <- map_ecosystem_broad  # use the same classification as the figure
+    eco_stats <- dat_filt[, .(eco = eco_class(ecosystem), reads_norm, member_unit)]
+    eco_stats <- eco_stats[, .(s = sum(reads_norm)), by = .(member_unit, eco)]
+    eco_stats[, pct := round(100 * s / sum(s), 1), by = member_unit]
+    print(eco_stats[order(member_unit, -pct)])
 
     invisible(list(
         dat_filt    = dat_filt,

@@ -171,37 +171,110 @@ cat("  S14 KEGG complete:", nrow(sup_table_5_s2), "rows\n")
 cat("  S15 CAZy all:     ", nrow(sup_table_5_s3), "rows,", ncol(sup_table_5_s3), "cols\n")
 cat("  S16 CAZy auth:    ", nrow(sup_table_5_s4), "rows\n")
 
-# ── sup_table_6: Viral ────────────────────────────────────────────────────────
+# ── sup_table_6: Viral (two-family FDR + positional QC + genome-size normalisation)
+#
+# Tier 1: IMGVR refs — DBH step-down FDR over ~18,600 refs per sample (q <= 0.02)
+#          + positional entropy >= 0.3 (anti-cross-mapping QC).
+# Tier 2: vir* refs  — targeted BH-FDR over 193 custom archaeal virus refs per
+#          sample (q <= 0.05) + positional read-spread QC (min start_diversity > 0.3
+#          and min positional_score > 0.5) to exclude cross-mapping artifacts.
+# Both tiers: DART authentication (mean_posterior >= 0.7).
+# n_ancient joined back from per-sample EMI functional files.
+# genome_nt: actual genome length (bp) from IMG/VR v4 for IMGVR refs;
+#            total_cds_aa × 3 for custom vir* refs.
+# reads_norm = n_ancient / genome_nt × 1e6 (reads per million genome nucleotides).
 
-viral_files   <- list.files("./results/functional_agp/viral",
-                            pattern = "^viral_emi\\.functional\\.tsv$",
-                            recursive = TRUE, full.names = TRUE)
-viral_samples <- basename(dirname(viral_files))
+# Load all EMI functional files to get n_ancient (not in viral-auth output)
+emi_files   <- list.files("./results/virome_agp/functional",
+                           pattern = "^viral_emi\\.functional\\.tsv$",
+                           recursive = TRUE, full.names = TRUE)
+emi_samples <- basename(dirname(emi_files))
 
-viral_emi_raw <- rbindlist(mapply(function(f, s) {
-    d <- fread(f, showProgress = FALSE)[level == "group"]
-    d[, sample := s]
+emi_ancient <- rbindlist(mapply(function(f, s) {
+    d <- fread(f, showProgress = FALSE)[level == "group",
+                                        .(reference = function_id, n_ancient, sample = s)]
     d
-}, viral_files, viral_samples, SIMPLIFY = FALSE), fill = TRUE) |>
-    as_tibble() |>
-    rename(reference = function_id) |>
-    inner_join(sample_meta_dart, by = "sample")
+}, emi_files, emi_samples, SIMPLIFY = FALSE), fill = TRUE)
 
-sup_table_6_s1 <- viral_emi_raw |>
+va <- fread("./results/virome_agp/viral_auth.per_sample.tsv", showProgress = FALSE)
+
+# Tier 1: IMGVR — DBH q ≤ 0.02 + entropy ≥ 0.3 (anti-cross-mapping QC)
+imgvr_sig <- va[!grepl("^vir", reference) & qvalue <= 0.02 &
+                (entropy < 0 | entropy >= 0.3)]
+
+# Tier 2: targeted BH for vir* (193 refs × all samples)
+all_vir_refs <- fread("./data/cdata/vir_ncds.tsv",
+                       col.names = c("reference", "n_cds"), showProgress = FALSE)$reference
+all_samples  <- unique(va$sample)
+vir_grid     <- CJ(sample = all_samples, reference = all_vir_refs)
+va_vir       <- va[grepl("^vir", reference)]
+vir_grid     <- merge(vir_grid, va_vir, by = c("sample", "reference"), all.x = TRUE)
+vir_grid[is.na(pvalue), pvalue := 1.0]
+vir_grid[, vir_qvalue := p.adjust(pvalue, method = "BH"), by = sample]
+
+# Positional QC gate (ancient DNA: reads must span distinct positions)
+vir_qc   <- fread("./data/cdata/vir_gene_qc.tsv",
+                   col.names = c("sample","reference","min_start_div","min_pos_score"),
+                   showProgress = FALSE)
+vir_grid <- merge(vir_grid, vir_qc, by = c("sample","reference"), all.x = TRUE)
+vir_sig  <- vir_grid[vir_qvalue <= 0.05 & !is.na(n_genes) &
+                      (is.na(min_start_div) | (min_start_div > 0.3 & min_pos_score > 0.5))]
+vir_sig[, qvalue := vir_qvalue]
+vir_sig[, c("vir_qvalue","min_start_div","min_pos_score") := NULL]
+
+# Combine and apply DART filter
+all_sig <- rbind(imgvr_sig, vir_sig, fill = TRUE)
+
+# Genome length (nt) lookup for normalisation
+imgvr_nt <- fread("./data/cdata/IMGVR_all_Sequence_information-high_confidence.tsv",
+                  select = c("UVIG", "Length"), showProgress = FALSE) |>
+    as_tibble() |> rename(reference = UVIG, genome_nt = Length)
+vir_aa_lut <- fread("./data/cdata/archaeal_cds_aa.tsv",
+                    col.names = c("reference", "total_cds_aa"), showProgress = FALSE)
+vir_nt <- vir_aa_lut[grepl("^vir", reference), .(reference, genome_nt = total_cds_aa * 3L)] |>
+    as_tibble()
+genome_nt_lut <- bind_rows(imgvr_nt, vir_nt)
+
+sup_table_6_s1 <- as_tibble(all_sig) |>
+    inner_join(sample_meta_dart, by = "sample") |>
+    left_join(as_tibble(emi_ancient), by = c("sample", "reference")) |>
     filter(mean_posterior >= 0.7) |>
-    select(short_label, label_orig = label, reference, n_genes, n_reads,
-           n_ancient, ancient_frac, mean_posterior, coverage_mean, avg_identity)
+    left_join(genome_nt_lut, by = "reference") |>
+    mutate(
+        genome_nt  = if_else(is.na(genome_nt) | genome_nt == 0L,
+                             as.integer(n_cds * 300L * 3L), as.integer(genome_nt)),
+        n_ancient  = pmin(n_ancient, n_reads),  # EM numerical cap
+        reads_norm = n_ancient / genome_nt * 1e6
+    ) |>
+    select(short_label, label_orig = label, reference, n_cds, n_genes, n_ancient, n_reads,
+           ancient_frac, mean_posterior, coverage_mean, avg_identity,
+           prot_coverage, qvalue, genome_nt, reads_norm) |>
+    arrange(short_label, reference)
 
+# IMGVR annotation (taxonomy + ecosystem) for S18
 imgvr <- fread("./data/cdata/IMGVR_all_Sequence_information-high_confidence.tsv",
                showProgress = FALSE,
-               select = c("UVIG", "Ecosystem classification",
+               select = c("UVIG", "Taxonomic classification", "Ecosystem classification",
                           "Gene content (total genes;cds;tRNA;geNomad marker)")) |>
     clean_names() |>
     mutate(n_cds = as.integer(sub("^[^;]+;([^;]+);.*", "\\1",
         gene_content_total_genes_cds_t_rna_ge_nomad_marker))) |>
-    select(reference = uvig, n_cds, ecosystem = ecosystem_classification)
+    select(reference = uvig, n_cds,
+           taxonomy   = taxonomic_classification,
+           ecosystem  = ecosystem_classification)
 
-sup_table_6_s2 <- imgvr |> filter(reference %in% sup_table_6_s1$reference)
+# vir* reference n_cds lookup for S18
+vir_ncds <- fread("./data/cdata/vir_ncds.tsv",
+                   col.names = c("reference", "n_cds"), showProgress = FALSE) |>
+    as_tibble() |>
+    mutate(taxonomy  = "Archaeal viruses/mobile elements (custom reference)",
+           ecosystem = "Custom archaeal virus reference (not in IMG/VR)")
+
+sig_refs <- unique(sup_table_6_s1$reference)
+sup_table_6_s2 <- bind_rows(
+    imgvr |> filter(reference %in% sig_refs),
+    vir_ncds |> filter(reference %in% sig_refs)
+) |> arrange(reference)
 
 wb6 <- createWorkbook()
 addWorksheet(wb6, "S17 - Viral references")

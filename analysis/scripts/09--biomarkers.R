@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(readxl)
 library(showtext)
@@ -8,18 +7,13 @@ library(ggtext)
 # Initialize settings
 showtext_auto()
 
-# Data Loading Functions ----
 
 #' Load sample metadata
-#' @param path Path to metadata file
-#' @return Tibble with cleaned metadata
 load_metadata <- function(path) {
     read_tsv(path, show_col_types = FALSE)
 }
 
 #' Load biomarker data
-#' @param path Path to biomarker Excel file
-#' @return Tibble with raw biomarker data
 load_biomarker_data <- function(path) {
     read_xlsx(path) %>%
         janitor::clean_names() %>%
@@ -27,12 +21,8 @@ load_biomarker_data <- function(path) {
         select(-unit, -sample_code, -x4)
 }
 
-# Data Processing Functions ----
 
 #' Process biomarker data
-#' @param raw_data Raw biomarker data
-#' @param combined_biomarker Biomarker metadata with short names and environments
-#' @return Processed biomarker data tibble
 process_biomarker_data <- function(raw_data, combined_biomarker) {
     raw_data %>%
         pivot_longer(
@@ -58,7 +48,6 @@ process_biomarker_data <- function(raw_data, combined_biomarker) {
 }
 
 #' Create biomarker metadata
-#' @return Tibble with biomarker names, short names, environments, and colors
 create_biomarker_metadata <- function() {
     biomarkers <- c(
         "adenosylhopane", "adenosylhopane<sub><sub>HG-Me<sub><sub>", "adenosylhopane<sub><sub>HG-diMe<sub><sub>",
@@ -94,9 +83,6 @@ create_biomarker_metadata <- function() {
 }
 
 #' Get short label order
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @param biomarker_data Processed biomarker data
-#' @return Character vector of ordered short labels
 get_short_label_order <- function(kapk_cdata_agg, biomarker_data) {
     kapk_cdata_agg %>%
         filter(short_label %in% unique(biomarker_data$short_label)) %>%
@@ -108,14 +94,8 @@ get_short_label_order <- function(kapk_cdata_agg, biomarker_data) {
         pull(short_label)
 }
 
-# Visualization Functions ----
 
 #' Plot biomarker proportions
-#' @param biomarker_data Processed biomarker data
-#' @param kapk_cdata_agg Aggregated sample metadata
-#' @param short_label_order Ordered short labels
-#' @param colors Named vector of colors
-#' @return ggplot object
 plot_biomarker_proportions <- function(biomarker_data, kapk_cdata_agg, short_label_order, colors) {
     biomarker_data %>%
         inner_join(kapk_cdata_agg, by = "short_label") %>%
@@ -148,10 +128,8 @@ plot_biomarker_proportions <- function(biomarker_data, kapk_cdata_agg, short_lab
         ggpubr::rotate()
 }
 
-# Main Execution Function ----
 
 #' Main execution function
-#' @return List containing results and plots
 main <- function() {
     # Load metadata
     kapk_cdata <- load_metadata("./data/cdata/KapK-cdata-manuscript-20221211.tsv")
