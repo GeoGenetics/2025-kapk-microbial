@@ -611,6 +611,142 @@ plot_combined_tree <- function(iqtree_file, mcc_file, ani_file) {
   }) # end suppressMessages
 }
 
+# ── Supplementary: complete 79-taxon IQ-TREE ───────────────────────────────────
+plot_full_tree <- function(iqtree_file, ani_file) {
+  suppressMessages({
+
+  iqtree <- read.tree(iqtree_file)
+  # Round-trip to clean edge matrix
+  iqtree <- read.tree(text = write.tree(iqtree))
+
+  meta <- tryCatch({
+    raw <- read.table(META_FILE, sep = "\t", header = FALSE, quote = "",
+                      comment.char = "#", stringsAsFactors = FALSE,
+                      col.names = c("id", "completeness", "contamination",
+                                    "strain_hetero", "classification",
+                                    "ncbi_name", "sample_description"))
+    raw %>% mutate(id = trimws(id))
+  }, error = function(e) data.frame())
+
+  classify_biome <- function(desc) {
+    desc <- tolower(desc)
+    if (grepl("permafrost", desc))               "Permafrost"
+    else if (grepl("peatland|peat|bog|fen|sphagnum|spruce", desc)) "Peatland"
+    else if (grepl("tundra", desc))              "Tundra"
+    else if (grepl("arctic|barrow|alaska", desc)) "Arctic peat"
+    else if (grepl("freshwater|sediment.*fresh|fresh.*sediment|urban freshwater|natural freshwater|aquatic", desc)) "Freshwater"
+    else if (grepl("sediment", desc))            "Sediment"
+    else if (grepl("rice|wastewater|bioreactor", desc)) "Other"
+    else                                          "Soil"
+  }
+
+  focal_biomes <- c(
+    ancient_consensus    = "Kap K\u00f8benhavn",
+    s17_ancient_relative = "Kap K\u00f8benhavn"
+  )
+
+  biome_cols <- c(
+    "Kap K\u00f8benhavn" = COL_ANCIENT,
+    "Permafrost"      = "#8AAFC2",
+    "Arctic peat"     = "#6B8C6B",
+    "Peatland"        = "#8BAD6A",
+    "Tundra"          = "#9B8FB8",
+    "Freshwater"      = "#6AA898",
+    "Sediment"        = "#B09070",
+    "Soil"            = "#C4A87A",
+    "Other"           = "grey75"
+  )
+
+  ani_df <- tryCatch(
+    read_tsv(ani_file,
+             col_names      = c("query", "ref", "ani", "frag_mapped", "frag_total"),
+             show_col_types = FALSE) %>%
+      filter(grepl("ancient_consensus", query)) %>%
+      mutate(tip = sub("\\.fna$", "", basename(ref))),
+    error = function(e) tibble()
+  )
+  get_ani <- function(nm) {
+    v <- ani_df$ani[ani_df$tip == nm]; if (length(v)) v[1] else NA_real_
+  }
+
+  biome_from_id <- function(nm) {
+    row <- meta[meta$id == nm, ]
+    if (nrow(row) == 0) return(NA_character_)
+    classify_biome(row$sample_description[1])
+  }
+
+  tip_meta <- tibble(
+    label      = iqtree$tip.label,
+    is_kapk    = label %in% c("ancient_consensus", "s17_ancient_relative"),
+    tip_face   = ifelse(is_kapk, "bold", "plain"),
+    biome      = factor(
+      ifelse(label %in% names(focal_biomes),
+             focal_biomes[label],
+             sapply(label, biome_from_id)),
+      levels = names(biome_cols)
+    )
+  )
+
+  base_p <- ggtree(treeio::as.treedata(iqtree), color = "grey35", linewidth = 0.25)
+  td      <- base_p$data
+  n_tips  <- Ntip(iqtree)
+  max_x   <- max(td$x, na.rm = TRUE)
+
+  support_dat <- td %>%
+    filter(!isTip, !is.na(label), nzchar(label),
+           node != n_tips + 1, grepl("/", label)) %>%
+    mutate(
+      sh   = as.numeric(sub("/.*", "", label)),
+      uf   = as.numeric(sub(".*/", "", label)),
+      show = (sh >= 80 | uf >= 95)
+    ) %>%
+    filter(show)
+
+  biome_x_offset <- max_x * 0.02
+
+  base_p %<+% tip_meta +
+    geom_point(aes(x = x + biome_x_offset, fill = biome),
+               data = function(d) d[d$isTip & !is.na(d$isTip), ],
+               shape = 22, size = 1.8, colour = "black", stroke = 0.3,
+               show.legend = TRUE) +
+    geom_tiplab(aes(label = label, fontface = tip_face),
+                colour = "grey15", size = 1.8, offset = max_x * 0.05, hjust = 0,
+                family = FONT) +
+    geom_text(data = support_dat,
+              aes(x = x, y = y, label = label),
+              size = 1.5, hjust = 1.1, vjust = -0.5,
+              colour = "grey35", family = FONT, inherit.aes = FALSE) +
+    scale_fill_manual(values = biome_cols, name = NULL, na.value = "grey80",
+                      guide = guide_legend(
+                        override.aes = list(size = 2.5, shape = 22,
+                                            colour = "black", stroke = 0.3)
+                      )) +
+    scale_x_continuous(expand = expansion(mult = c(0.02, 1.4))) +
+    coord_cartesian(clip = "off") +
+    labs(x = "Nucleotide substitutions per site", y = NULL,
+         title = "Complete IQ-TREE ML phylogeny (79 taxa, Methanoflorentales)") +
+    theme_tree2(base_size = 7) +
+    theme(
+      text              = element_text(family = FONT),
+      axis.text.x       = element_text(size = 6, colour = "grey20"),
+      axis.title.x      = element_text(size = 7, colour = "grey10"),
+      axis.line.x       = element_line(linewidth = 0.3, colour = "grey35"),
+      axis.ticks.x      = element_line(linewidth = 0.3, colour = "grey35"),
+      plot.margin       = margin(5, 10, 5, 10, "pt"),
+      plot.title        = element_text(size = 7, colour = "grey10"),
+      legend.position   = "top",
+      legend.direction  = "horizontal",
+      legend.background = element_blank(),
+      legend.text       = element_text(size = 6.5, family = FONT,
+                                       margin = margin(l = 1, r = 3, unit = "pt")),
+      legend.title      = element_blank(),
+      legend.key.size   = unit(5, "pt"),
+      legend.key.width  = unit(6, "pt")
+    )
+
+  }) # end suppressMessages
+}
+
 # ── BEAST2 log helpers ─────────────────────────────────────────────────────────
 read_beast_log <- function(path, burnin = 0.10) {
   lines <- readLines(path)
@@ -845,6 +981,20 @@ main <- function() {
   ggsave(out_png, fig, width = FIG_W, height = FIG_H,
          units = "mm", dpi = 300, bg = "white", device = ragg::agg_png)
   message("Saved: ", out_png)
+
+  # ── Supplementary: complete 79-taxon tree ───────────────────────────────────
+  message("Building supplementary full tree...")
+  pS <- plot_full_tree(IQTREE_FILE, ANI_FILE)
+
+  supp_pdf <- file.path(OUTDIR, "figS-methanoflorens-full-tree.pdf")
+  supp_png <- file.path(OUTDIR, "figS-methanoflorens-full-tree.png")
+
+  ggsave(supp_pdf, pS, width = 180, height = 260,
+         units = "mm", device = cairo_pdf)
+  message("Saved: ", supp_pdf)
+  ggsave(supp_png, pS, width = 180, height = 260,
+         units = "mm", dpi = 300, bg = "white", device = ragg::agg_png)
+  message("Saved: ", supp_png)
 }
 
 main()
