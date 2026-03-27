@@ -101,6 +101,27 @@ sup_table_1_s2 <- control_samples |>
 # Uplift model (S3) — pre-computed TSV
 sup_table_1_s3 <- read_tsv("./manuscript/tables/sup_table_1_s3.tsv")
 
+# Taxonomy and damage (S4)
+tax_data_s4 <- read_tsv("./results/taxonomy/tp-mapping-filtered.nocontam.tax.tsv.gz",
+                         show_col_types = FALSE) |>
+    inner_join(kapk_cdata |> select(label, figure_names), by = "label") |>
+    inner_join(tax_info, by = "reference") |>
+    filter(figure_names %in% kapk_cdata_agg$label)
+
+dmg_local_s4 <- read_csv("./data/taxonomy/tp-mdmg.weight-1.csv.gz",
+                          show_col_types = FALSE) |>
+    rename(reference = tax_id) |>
+    inner_join(kapk_cdata |> select(label, figure_names), by = "label") |>
+    filter(figure_names %in% kapk_cdata_agg$label) |>
+    select(label, figure_names, reference, damage, significance)
+
+sup_table_1_s4 <- kapk_cdata_agg |>
+    select(short_label, figure_names = label) |>
+    inner_join(tax_data_s4, by = "figure_names") |>
+    inner_join(dmg_local_s4, by = c("label", "figure_names", "reference")) |>
+    select(-label) |>
+    rename(label_orig = figure_names)
+
 # Re-extraction (S5, S6)
 sup_table_1_s5 <- read_tsv("./manuscript/tables/kapk_reextractions-cdata.tsv")
 sup_table_1_s6 <- read_tsv("./manuscript/tables/kapk_reextractions-taxonomy.tsv")
@@ -112,16 +133,18 @@ sup_table_1 <- createWorkbook()
 addWorksheet(sup_table_1, "S1 - Sample information")
 addWorksheet(sup_table_1, "S2 - Control samples")
 addWorksheet(sup_table_1, "S3 - Uplift model data")
+addWorksheet(sup_table_1, "S4 - Taxonomy and damage")
 addWorksheet(sup_table_1, "S5 - Re-extraction metadata")
 addWorksheet(sup_table_1, "S6 - Re-extraction taxonomy")
 addWorksheet(sup_table_1, "S7 - Lipid biomarkers")
 
-writeData(sup_table_1, "S1 - Sample information",   sup_table_1_s1 |> clean_names(case = "sentence"))
-writeData(sup_table_1, "S2 - Control samples",       sup_table_1_s2 |> clean_names(case = "sentence"))
-writeData(sup_table_1, "S3 - Uplift model data",     sup_table_1_s3 |> clean_names(case = "sentence"))
-writeData(sup_table_1, "S5 - Re-extraction metadata",sup_table_1_s5 |> clean_names(case = "sentence"))
-writeData(sup_table_1, "S6 - Re-extraction taxonomy",sup_table_1_s6 |> clean_names(case = "sentence"))
-writeData(sup_table_1, "S7 - Lipid biomarkers",      sup_table_1_s7 |> clean_names(case = "sentence"))
+writeData(sup_table_1, "S1 - Sample information",    sup_table_1_s1 |> clean_names(case = "sentence"))
+writeData(sup_table_1, "S2 - Control samples",        sup_table_1_s2 |> clean_names(case = "sentence"))
+writeData(sup_table_1, "S3 - Uplift model data",      sup_table_1_s3 |> clean_names(case = "sentence"))
+writeData(sup_table_1, "S4 - Taxonomy and damage",    sup_table_1_s4 |> clean_names(case = "sentence"))
+writeData(sup_table_1, "S5 - Re-extraction metadata", sup_table_1_s5 |> clean_names(case = "sentence"))
+writeData(sup_table_1, "S6 - Re-extraction taxonomy", sup_table_1_s6 |> clean_names(case = "sentence"))
+writeData(sup_table_1, "S7 - Lipid biomarkers",       sup_table_1_s7 |> clean_names(case = "sentence"))
 
 saveWorkbook(sup_table_1, file = "../supp-tab-v2/sup_table_1.xlsx", overwrite = TRUE)
 
@@ -182,7 +205,7 @@ mg_mapping <- kapk_cdata |>
 sup_table_3_s1 <- kapk_cdata_agg |>
     select(short_label, label) |>
     distinct() |>
-    inner_join(mg_mapping) |>
+    inner_join(mg_mapping, by = c("label" = "label_orig")) |>
     rename(label_orig = label)
 
 woodcroft_mapping <- read_tsv("./data/mag-distribution/woodcroft2018-tp-mapping-filtered.summary.tsv.gz") |>
@@ -203,7 +226,7 @@ woodcroft_mapping <- kapk_cdata |>
 sup_table_3_s2 <- kapk_cdata_agg |>
     select(short_label, label) |>
     distinct() |>
-    inner_join(woodcroft_mapping) |>
+    inner_join(woodcroft_mapping, by = c("label" = "label_orig")) |>
     rename(label_orig = label)
 
 sup_table_3 <- createWorkbook()
