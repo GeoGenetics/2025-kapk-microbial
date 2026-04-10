@@ -28,12 +28,10 @@ Download and extract into the `analysis/` working directory:
 
 ```bash
 cd analysis
-wget https://erda.ku.dk/TODO/data.tar.gz
-wget https://erda.ku.dk/TODO/results.tar.gz
-wget https://erda.ku.dk/TODO/manuscript.tar.gz
+wget http://files.metagenomics.eu/2025-kapk-microbial-v2/data.tar.gz
+wget http://files.metagenomics.eu/2025-kapk-microbial-v2/results.tar.gz
 tar xzf data.tar.gz
 tar xzf results.tar.gz
-tar xzf manuscript.tar.gz
 ```
 
 The taxonomic database used for profiling is available at: https://doi.org/n6ks

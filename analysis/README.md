@@ -7,12 +7,10 @@ R scripts for Fernandez-Guerra et al. 2025. Run from the `analysis/` directory.
 Input data and pre-computed results are distributed via ERDA. Download and extract into `analysis/`:
 
 ```bash
-wget https://erda.ku.dk/TODO/data.tar.gz
-wget https://erda.ku.dk/TODO/results.tar.gz
-wget https://erda.ku.dk/TODO/manuscript.tar.gz
+wget http://files.metagenomics.eu/2025-kapk-microbial-v2/data.tar.gz
+wget http://files.metagenomics.eu/2025-kapk-microbial-v2/results.tar.gz
 tar xzf data.tar.gz
 tar xzf results.tar.gz
-tar xzf manuscript.tar.gz
 ```
 
 ## Scripts
