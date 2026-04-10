@@ -397,8 +397,8 @@ plot_combined_tree <- function(iqtree_file, mcc_file, ani_file) {
   name_map <- c(
     ancient_consensus    = "KapK-anc",
     s17_ancient_relative = "KapK-mod",
-    NAY3300025461b7      = "NAY3300025461",
-    SOIL100000032        = "SOIL100000032",
+    NAY3300025461b7      = "3300025461_7",
+    SOIL100000032        = "SRR12756228bin.1",
     GCA054338395         = "GCA054338395",
     GCA054338475         = "GCA054338475",
     GCA963719035         = "GCA963719035"
@@ -642,6 +642,7 @@ plot_full_tree <- function(iqtree_file, ani_file) {
 
   focal_biomes <- c(
     ancient_consensus    = "Kap K\u00f8benhavn",
+    modern_consensus     = "Kap K\u00f8benhavn",
     s17_ancient_relative = "Kap K\u00f8benhavn"
   )
 
@@ -675,73 +676,102 @@ plot_full_tree <- function(iqtree_file, ani_file) {
     classify_biome(row$sample_description[1])
   }
 
+  # Rename tips to original bin names from Ma and Nayfach
+  # Build biome lookup BEFORE renaming (metadata uses original IDs)
+  rename_map <- c(
+    ancient_consensus    = "KapK-anc",
+    modern_consensus     = "KapK-dec",
+    s17_ancient_relative = "KapK-mod",
+    SOIL100000032        = "SRR12756228bin.1",
+    NAY3300025461b7      = "3300025461_7"
+  )
+  orig_labels <- iqtree$tip.label
+  iqtree$tip.label <- ifelse(
+    orig_labels %in% names(rename_map),
+    rename_map[orig_labels],
+    orig_labels
+  )
+
   tip_meta <- tibble(
     label      = iqtree$tip.label,
-    is_kapk    = label %in% c("ancient_consensus", "s17_ancient_relative"),
+    is_kapk    = orig_labels %in% c("ancient_consensus", "modern_consensus", "s17_ancient_relative"),
     tip_face   = ifelse(is_kapk, "bold", "plain"),
     biome      = factor(
-      ifelse(label %in% names(focal_biomes),
-             focal_biomes[label],
-             sapply(label, biome_from_id)),
+      ifelse(orig_labels %in% names(focal_biomes),
+             focal_biomes[orig_labels],
+             sapply(orig_labels, biome_from_id)),
       levels = names(biome_cols)
     )
   )
 
-  base_p <- ggtree(treeio::as.treedata(iqtree), color = "grey35", linewidth = 0.25)
+  base_p <- ggtree(treeio::as.treedata(iqtree), color = "grey20", linewidth = 0.6)
   td      <- base_p$data
   n_tips  <- Ntip(iqtree)
   max_x   <- max(td$x, na.rm = TRUE)
 
+  # Node support: coloured dots — black = fully supported, grey = partial
   support_dat <- td %>%
     filter(!isTip, !is.na(label), nzchar(label),
            node != n_tips + 1, grepl("/", label)) %>%
     mutate(
       sh   = as.numeric(sub("/.*", "", label)),
       uf   = as.numeric(sub(".*/", "", label)),
-      show = (sh >= 80 | uf >= 95)
+      support_cat = case_when(
+        sh >= 80 & uf >= 95 ~ "full",     # SH-aLRT >= 80 AND UFBoot >= 95
+        sh >= 80 | uf >= 95 ~ "partial",   # one criterion met
+        TRUE                ~ "none"
+      )
     ) %>%
-    filter(show)
+    filter(support_cat != "none")
 
-  biome_x_offset <- max_x * 0.02
+  support_cols <- c(full = "black", partial = "grey60")
+
+  biome_x_offset <- max_x * 0.015
 
   base_p %<+% tip_meta +
+    geom_nodepoint(data = support_dat,
+                   aes(x = x, y = y, colour = support_cat),
+                   size = 1.2, shape = 16, inherit.aes = FALSE) +
+    scale_colour_manual(values = support_cols,
+                        labels = c(full = "SH-aLRT \u2265 80 & UFBoot \u2265 95",
+                                   partial = "SH-aLRT \u2265 80 or UFBoot \u2265 95"),
+                        name = NULL,
+                        guide = guide_legend(order = 2)) +
+    ggnewscale::new_scale_colour() +
     geom_point(aes(x = x + biome_x_offset, fill = biome),
                data = function(d) d[d$isTip & !is.na(d$isTip), ],
-               shape = 22, size = 1.8, colour = "black", stroke = 0.3,
+               shape = 22, size = 2.2, colour = "black", stroke = 0.3,
                show.legend = TRUE) +
     geom_tiplab(aes(label = label, fontface = tip_face),
-                colour = "grey15", size = 1.8, offset = max_x * 0.05, hjust = 0,
+                colour = "grey10", size = 2.8, offset = max_x * 0.04, hjust = 0,
                 family = FONT) +
-    geom_text(data = support_dat,
-              aes(x = x, y = y, label = label),
-              size = 1.5, hjust = 1.1, vjust = -0.5,
-              colour = "grey35", family = FONT, inherit.aes = FALSE) +
     scale_fill_manual(values = biome_cols, name = NULL, na.value = "grey80",
                       guide = guide_legend(
-                        override.aes = list(size = 2.5, shape = 22,
+                        order = 1,
+                        override.aes = list(size = 3, shape = 22,
                                             colour = "black", stroke = 0.3)
                       )) +
-    scale_x_continuous(expand = expansion(mult = c(0.02, 1.4))) +
+    scale_x_continuous(expand = expansion(mult = c(0.02, 1.2))) +
     coord_cartesian(clip = "off") +
-    labs(x = "Nucleotide substitutions per site", y = NULL,
-         title = "Complete IQ-TREE ML phylogeny (79 taxa, Methanoflorentales)") +
-    theme_tree2(base_size = 7) +
+    labs(x = "Nucleotide substitutions per site", y = NULL) +
+    theme_tree2(base_size = 8) +
     theme(
       text              = element_text(family = FONT),
-      axis.text.x       = element_text(size = 6, colour = "grey20"),
-      axis.title.x      = element_text(size = 7, colour = "grey10"),
+      axis.text.x       = element_text(size = 7, colour = "grey20"),
+      axis.title.x      = element_text(size = 8, colour = "grey10"),
       axis.line.x       = element_line(linewidth = 0.3, colour = "grey35"),
       axis.ticks.x      = element_line(linewidth = 0.3, colour = "grey35"),
-      plot.margin       = margin(5, 10, 5, 10, "pt"),
-      plot.title        = element_text(size = 7, colour = "grey10"),
+      plot.margin       = margin(5, 15, 5, 10, "pt"),
       legend.position   = "top",
       legend.direction  = "horizontal",
       legend.background = element_blank(),
-      legend.text       = element_text(size = 6.5, family = FONT,
-                                       margin = margin(l = 1, r = 3, unit = "pt")),
+      legend.text       = element_text(size = 7, family = FONT,
+                                       margin = margin(l = 1, r = 5, unit = "pt")),
       legend.title      = element_blank(),
-      legend.key.size   = unit(5, "pt"),
-      legend.key.width  = unit(6, "pt")
+      legend.key.size   = unit(7, "pt"),
+      legend.key.width  = unit(8, "pt"),
+      legend.box        = "horizontal",
+      legend.spacing.x  = unit(8, "pt")
     )
 
   }) # end suppressMessages
@@ -989,10 +1019,10 @@ main <- function() {
   supp_pdf <- file.path(OUTDIR, "figS-methanoflorens-full-tree.pdf")
   supp_png <- file.path(OUTDIR, "figS-methanoflorens-full-tree.png")
 
-  ggsave(supp_pdf, pS, width = 180, height = 260,
+  ggsave(supp_pdf, pS, width = 210, height = 297,
          units = "mm", device = cairo_pdf)
   message("Saved: ", supp_pdf)
-  ggsave(supp_png, pS, width = 180, height = 260,
+  ggsave(supp_png, pS, width = 210, height = 297,
          units = "mm", dpi = 300, bg = "white", device = ragg::agg_png)
   message("Saved: ", supp_png)
 }

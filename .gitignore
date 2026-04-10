@@ -32,14 +32,15 @@ analysis/Figure-*.pdf
 supp-tab/
 supp-tab-v2/
 
-# Old xFilter rules superseded by DART AGP rules in wf/analysis/function/
-wf/analysis/function/rules/mmseqs-*
-wf/analysis/function/rules/resistome-*
-wf/analysis/function/rules/stats-*
-wf/analysis/function/rules/read-*
-wf/analysis/function/rules/get-damaged-reads.smk
-wf/analysis/function/rules_emi.smk
-wf/analysis/function/config.denbi.yaml
+# Distribution archives — built by analysis/.scripts/build-archives.sh
+analysis/data.tar.gz
+analysis/results.tar.gz
+
+# C++ tools — not required for R analysis scripts
+tools/
+
+# Personal/transient helper scripts (root level only)
+/.scripts/
 
 # Extra scripts also tracked at top level (live in extra/ only)
 analysis/scripts/benchmark-saturation.R
