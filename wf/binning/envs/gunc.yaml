@@ -1,0 +1,6 @@
+name: gunc
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - gunc=1.0.6

@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(janitor)
 library(ggthemr)
@@ -17,13 +16,11 @@ CONTROL_REFS_PATH <- file.path(RESULTS_DIR, "controls/controls.references2remove
 showtext_auto()
 
 #' Load custom library functions
-#' @return None
 load_custom_lib <- function() {
     source("libs/lib.R")
 }
 
 #' Load all metadata files
-#' @return list containing kapk_cdata and kapk_cdata_agg
 load_metadata <- function() {
     list(
         cdata = read_tsv(file.path(DATA_DIR, "cdata/KapK-cdata-manuscript-20221211.tsv")),
@@ -32,7 +29,6 @@ load_metadata <- function() {
 }
 
 #' Load and process taxonomic annotations
-#' @return data.frame with parsed taxonomic information
 load_taxonomy <- function() {
     read_tsv(
         file.path(DATA_DIR, "taxonomy/hires-organelles-viruses-arctic.tax.tsv"),
@@ -50,7 +46,6 @@ load_taxonomy <- function() {
 }
 
 #' Load and process statistics for different stages
-#' @return list containing initial, extension, and derep stats
 load_stats <- function() {
     stats_dir <- file.path(DATA_DIR, "stats")
     list(
@@ -61,9 +56,6 @@ load_stats <- function() {
 }
 
 #' Calculate average read length differences
-#' @param initial_stats Initial statistics data
-#' @param extension_stats Extension statistics data
-#' @return data.frame with average length differences
 calculate_read_differences <- function(initial_stats, extension_stats) {
     initial_stats |>
         select(initial_avg_len = avg_len, label) |>
@@ -73,10 +65,6 @@ calculate_read_differences <- function(initial_stats, extension_stats) {
 }
 
 #' Create sequence distribution plot
-#' @param initial_stats Initial statistics
-#' @param derep_stats Dereplicated statistics
-#' @param kapk_cdata Sample metadata
-#' @return ggplot object
 plot_sequence_distribution <- function(initial_stats, derep_stats, kapk_cdata) {
     initial_stats |>
         select(num_seqs, label) |>
@@ -127,9 +115,6 @@ plot_sequence_distribution <- function(initial_stats, derep_stats, kapk_cdata) {
 }
 
 #' Process and filter taxonomic data
-#' @param kapk_cdata Sample metadata
-#' @param control_references Control reference data
-#' @return Filtered taxonomic data
 process_taxonomic_data <- function(kapk_cdata, control_references) {
     tax_data <- read_tsv(file.path(DATA_DIR, "taxonomy/tp-mapping-filtered.summary.tsv.gz")) |>
         filter(label %in% kapk_cdata$label) |>
@@ -142,10 +127,6 @@ process_taxonomic_data <- function(kapk_cdata, control_references) {
 }
 
 #' Filter samples based on minimum sequence threshold
-#' @param tax_data Taxonomic data
-#' @param derep_stats Dereplicated statistics
-#' @param kapk_cdata Sample metadata
-#' @return Filtered taxonomic data
 filter_samples <- function(tax_data, derep_stats, kapk_cdata) {
     derep_stats_filtered <- derep_stats |>
         inner_join(kapk_cdata) |>
@@ -167,9 +148,6 @@ filter_samples <- function(tax_data, derep_stats, kapk_cdata) {
 }
 
 #' Aggregate filtered taxonomic data
-#' @param tax_data_filtered Filtered taxonomic data
-#' @param kapk_cdata Sample metadata
-#' @return Aggregated taxonomic data
 aggregate_taxonomic_data <- function(tax_data_filtered, kapk_cdata) {
     tax_data_agg <- tax_data_filtered |>
         select(
@@ -196,7 +174,6 @@ aggregate_taxonomic_data <- function(tax_data_filtered, kapk_cdata) {
 }
 
 #' Main execution function
-#' @return None
 main <- function() {
     # Load custom library
     load_custom_lib()

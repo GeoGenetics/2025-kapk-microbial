@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(showtext)
 library(ggdensity)
@@ -9,9 +8,6 @@ source("./libs/lib.R")
 showtext_auto()
 
 #' Clean vector names
-#' @param x Vector to clean
-#' @param refactor Whether to return as factor
-#' @return Cleaned vector
 clean_vec <- function(x, refactor = FALSE) {
     require(magrittr, quietly = TRUE)
 
@@ -37,7 +33,6 @@ clean_vec <- function(x, refactor = FALSE) {
 }
 
 #' Load required data for analysis
-#' @return list of loaded data
 load_data <- function() {
     # Load metadata
     kapk_cdata <- read_tsv("./data/cdata/KapK-cdata-manuscript-20221211.tsv",
@@ -128,8 +123,6 @@ load_data <- function() {
 }
 
 #' Process MAG data
-#' @param data Loaded data list
-#' @return processed MAG data
 process_mag_data <- function(data) {
     # Load and process mapping data
     mg_mapping <- read_tsv("./data/mag-distribution/GEM-20220926__tg2g-20220926-tp-mapping-filtered.summary.tsv.gz",
@@ -179,8 +172,6 @@ process_mag_data <- function(data) {
 }
 
 #' Process Woodcroft data
-#' @param data Loaded data list
-#' @return processed Woodcroft data
 process_woodcroft_data <- function(data) {
     # Load and process mapping data
     woodcroft_mapping <- read_tsv("./data/mag-distribution/woodcroft2018-tp-mapping-filtered.summary.tsv.gz",
@@ -228,9 +219,6 @@ process_woodcroft_data <- function(data) {
 }
 
 #' Process data for habitat metrics plot
-#' @param mag_data Processed MAG data
-#' @param kapk_cdata_agg Aggregated metadata
-#' @return list containing plot data and top habitats
 process_habitat_metrics_data <- function(mag_data, kapk_cdata_agg) {
     # Get top habitats
     top_habitats <- mag_data |>
@@ -268,9 +256,6 @@ process_habitat_metrics_data <- function(mag_data, kapk_cdata_agg) {
 }
 
 #' Create habitat metrics plot
-#' @param data Processed habitat data
-#' @param top_habitats Top habitats data
-#' @return ggplot object
 plot_habitat_metrics <- function(data, top_habitats) {
     data |>
         select(species, domain, damage,
@@ -308,9 +293,6 @@ plot_habitat_metrics <- function(data, top_habitats) {
 }
 
 #' Create Woodcroft plot
-#' @param data Processed Woodcroft data
-#' @param kapk_cdata_agg Aggregated metadata
-#' @return ggplot object
 plot_woodcroft <- function(data, kapk_cdata_agg) {
     data |>
         inner_join(kapk_cdata_agg) |>
@@ -351,7 +333,6 @@ plot_woodcroft <- function(data, kapk_cdata_agg) {
 }
 
 #' Main execution function
-#' @return list containing results and plots
 main <- function() {
     # Load data
     data <- load_data()

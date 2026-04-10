@@ -1,0 +1,212 @@
+# AMBER Paper Workflow — Unified Pipeline
+# binning → resolve → QC → deconvolve → phylogenomics → BEAST2
+
+# ---------------------------------------------------------------------------
+# Input data
+# ---------------------------------------------------------------------------
+contigs: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/119_50/assembly/3e3ce8e9f7-derep-assm/final.contigs.fa"
+bam: "/maps/projects/caeg/people/kbd606/scratch/tmp/amber_cython_N1/map/mapped.reassigned.bam"
+
+# ---------------------------------------------------------------------------
+# Part 0: Reads-to-BAM mapping — set skip_mapping: false to run from scratch
+# When skip_mapping: true, the bam path above is used directly.
+# ---------------------------------------------------------------------------
+skip_mapping: true
+
+mapping:
+  reads:       "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/119_50/fastq/3e3ce8e9f7.derep.non.fq.gz"
+  threads:     24
+  bowtie2_k:   1000          # alignments per read; must be high for EM reassignment
+  em_preset:   "thorough"    # filterBAM EM preset: fast / balanced / thorough
+  min_ani:     0.0           # filterBAM -A: minimum read ANI filter (0 = keep all)
+  min_reads:   1             # filterBAM -n: minimum reads per reference
+
+# ---------------------------------------------------------------------------
+# Output directory — timestamp injected by run_paper.sh via --config timestamp=
+# ---------------------------------------------------------------------------
+outdir: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/paper_run"
+timestamp: "default"
+
+# ---------------------------------------------------------------------------
+# Skip binning — point to an existing resolve output directory
+# Set skip_binning: true and existing_resolve_dir to bypass Part A
+# ---------------------------------------------------------------------------
+skip_binning: true
+existing_resolve_dir: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/paper_run/resolve"
+
+# ---------------------------------------------------------------------------
+# Part A: AMBER binning (used when skip_binning: false)
+# ---------------------------------------------------------------------------
+amber:
+  binary: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/build/amber_gpu"
+  hmm: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/amber/auxiliary/checkm_markers_only.hmm"
+  encoder_seed: 42
+  random_seed: 1006
+  resolution: 5.0
+  bandwidth: 0.2
+  partgraph_ratio: 50
+  n_leiden_restarts: 25
+  n_encoder_restarts: 3
+  n_reps: 3
+
+resolve:
+  min_cobin_frac: 0.667
+  restarts: 25
+
+# ---------------------------------------------------------------------------
+# Quality filters
+# ---------------------------------------------------------------------------
+filter:
+  min_completeness: 50   # MQ threshold for GUNC + GTDB-Tk
+  max_contamination: 10
+
+# ---------------------------------------------------------------------------
+# Ancient bin selection (Part B)
+# ---------------------------------------------------------------------------
+ancient_selection:
+  gtdbtk_clade: "Bog-38"      # GTDB-Tk classification must contain this string
+  min_completeness: 90
+  max_contamination: 5
+  require_gunc_pass: true
+  tiebreak: "completeness"    # if multiple qualify, highest completeness wins
+
+# ---------------------------------------------------------------------------
+# Deconvolution (Part C)
+# ---------------------------------------------------------------------------
+deconvolve:
+  library_type: "ds"
+  em_iterations: 10
+  min_ancient_depth: 3.0
+  min_modern_depth: 2.0
+  threads: 16
+
+# ---------------------------------------------------------------------------
+# Phylogenomics (Parts D–F)
+# ---------------------------------------------------------------------------
+reference_genomes_dir: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/tmp/deconv_bin28/phylogenomics/Methanoflorentales_update_2026-02-09"
+
+marker_hmm_dir: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/119_50/phylogenomics/analysis/methanoflorens-tree/hmm"
+markers:
+  - COG0085-FAM000453_finalBA
+  - COG0086-FAM000452_finalBA
+  - DNGNGWU00001
+  - DNGNGWU00002
+  - DNGNGWU00003
+  - DNGNGWU00005
+  - DNGNGWU00006
+  - DNGNGWU00007
+  - DNGNGWU00009
+  - DNGNGWU00010
+  - DNGNGWU00011
+  - DNGNGWU00012
+  - DNGNGWU00013
+  - DNGNGWU00014
+  - DNGNGWU00015
+  - DNGNGWU00016
+  - DNGNGWU00017
+  - DNGNGWU00018
+  - DNGNGWU00019
+  - DNGNGWU00020
+  - DNGNGWU00021
+  - DNGNGWU00022
+  - DNGNGWU00023
+  - DNGNGWU00024
+  - DNGNGWU00025
+  - DNGNGWU00026
+  - DNGNGWU00027
+  - DNGNGWU00028
+  - DNGNGWU00029
+  - DNGNGWU00030
+  - DNGNGWU00031
+  - DNGNGWU00032
+  - DNGNGWU00033
+  - DNGNGWU00034
+  - DNGNGWU00036
+  - DNGNGWU00037
+  - DNGNGWU00039
+  - DNGNGWU00040
+  - L30
+  - S4
+
+hmm_evalue: 1e-10
+mafft_algorithm: "linsi"
+bmge_matrix: "BLOSUM30"
+
+iqtree_model: "GTR+G4"
+iqtree_bootstrap: 1000
+iqtree_alrt: 1000
+iqtree_scf_quartets: 100
+codon_max_gap: 0.2       # codon triplets with gap fraction > this are removed
+
+# SNP tree — species-level taxa (close relatives of Bog-38 target)
+snp_reference: "SOIL100000032"
+species_level_taxa:
+  - ancient_consensus
+  - modern_consensus
+  - s17_ancient_relative
+  - SOIL100000032
+  - NAY3300025461b7
+  - GCA054338395
+  - GCA054338475
+  - GCA963719035
+
+outgroup_taxa:
+  - GCA036832295
+  - GCA003170935
+
+nucmer_minmatch: 500
+snp_tree_model: "GTR+ASC+G4"
+
+# BEAST2
+beast2_chain_length: 100000000
+beast2_log_every: 5000
+beast2_tree_prior: "BDSS"
+beast2_clock_model: "strict"
+beast2_burnin_pct: 10
+beast2_snp_clock_rate_mean: 1.0e-9  # ~30x lower than codon XML; matches observed SNP divergence
+clock_rate_prior_mean: 5e-9
+clock_rate_prior_sd: 1.0
+sample_age: 2000000
+
+beagle_lib: "/maps/projects/caeg/people/kbd606/opt/beagle-cuda/lib"
+
+# ---------------------------------------------------------------------------
+# Conda environments (full paths for tools needing custom LD_LIBRARY_PATH)
+# ---------------------------------------------------------------------------
+envs:
+  assembly:   "/maps/projects/fernandezguerra/apps/opt/conda/envs/assembly"
+  bam_filter: "/maps/projects/fernandezguerra/apps/opt/conda/envs/bam-filter"
+  gunc:       "/maps/projects/fernandezguerra/apps/opt/conda/envs/gunc"
+  gtdbtk:     "/maps/projects/fernandezguerra/apps/opt/conda/envs/gtdbtk"
+
+# External databases
+checkm2:
+  threads: 16
+
+gunc:
+  db: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/tmp/gunc_db/gunc_db_progenomes2.1.dmnd"
+  threads: 16
+
+gtdbtk:
+  db: "/maps/projects/fernandezguerra/apps/opt/conda/envs/gtdbtk/share/gtdbtk-2.6.1/db"
+  threads: 16
+
+threads: 16
+
+# ---------------------------------------------------------------------------
+# Part H: Incubation comparison — dRep + S17 read mapping
+# ---------------------------------------------------------------------------
+incubation:
+  hq_bins_dir: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/incubations/results/hq_bins"
+  mq_bins_dir: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/incubations/results/mq_bins"
+  reads_r1: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/incubations/results/fastp/incubation_longDNA_R1.fastq.gz"
+  reads_r2: "/maps/projects/caeg/people/kbd606/scratch/kapk-assm/incubations/results/fastp/incubation_longDNA_R2.fastq.gz"
+  # t0 (pre-incubation) longDNA extraction — assemble reads from ancient lineage
+  # as a present-day (age=0) genome for molecular clock calibration
+  include_s17_assembly: true
+
+drep:
+  ani: 0.95           # primary MASH ANI filter (species-level)
+  secondary_ani: 0.99 # secondary cluster ANI (strain-level)
+  min_overlap: 0.10   # minimum coverage overlap
+  env: "/maps/projects/fernandezguerra/apps/opt/conda/envs/drep"

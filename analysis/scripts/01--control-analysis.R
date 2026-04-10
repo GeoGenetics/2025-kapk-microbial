@@ -1,14 +1,11 @@
-# Required libraries
 library(tidyverse)
 
-# Constants and file paths
 DATA_DIR <- "./data"
 RESULTS_DIR <- "./results/controls"
 TAXONOMY_DIR <- file.path(DATA_DIR, "taxonomy")
 STATS_DIR <- file.path(DATA_DIR, "stats")
 
 #' Load and process taxonomic annotations
-#' @return data.frame with parsed taxonomic information
 load_taxonomy <- function() {
     read_tsv(file.path(TAXONOMY_DIR, "hires-organelles-viruses-arctic.tax.tsv"),
         col_names = c("reference", "tax_string")
@@ -25,24 +22,17 @@ load_taxonomy <- function() {
 }
 
 #' Load control samples data
-#' @return data.frame with control sample information
 load_control_samples <- function() {
     read_tsv(file.path(DATA_DIR, "cdata/KapK_samples-controls-20221211.tsv"))
 }
 
 #' Load statistics for a given stage
-#' @param stage The processing stage (initial, extension, or derep)
-#' @param control_labels Vector of control sample labels
-#' @return data.frame with statistics
 load_stage_stats <- function(stage, control_labels) {
     read_tsv(file.path(STATS_DIR, sprintf("all.stats-%s-summary.tsv.gz", stage))) |>
         filter(label %in% control_labels)
 }
 
 #' Calculate and display sequence statistics
-#' @param initial_stats Initial statistics data.frame
-#' @param derep_stats Dereplicated statistics data.frame
-#' @param control_samples Control samples data.frame
 calculate_sequence_stats <- function(initial_stats, derep_stats, control_samples) {
     initial_stats |>
         rename(num_seqs_initial = num_seqs, sum_len_initial = sum_len) |>
@@ -58,9 +48,6 @@ calculate_sequence_stats <- function(initial_stats, derep_stats, control_samples
 }
 
 #' Create sequence distribution plot
-#' @param initial_stats Initial statistics data.frame
-#' @param derep_stats Dereplicated statistics data.frame
-#' @param control_samples Control samples data.frame
 plot_sequence_distribution <- function(initial_stats, derep_stats, control_samples) {
     initial_stats |>
         select(num_seqs, label) |>
@@ -105,8 +92,6 @@ plot_sequence_distribution <- function(initial_stats, derep_stats, control_sampl
 }
 
 #' Process taxonomic data
-#' @param control_samples Control samples data.frame
-#' @param tax_info Taxonomy information data.frame
 process_taxonomic_data <- function(control_samples, tax_info) {
     read_tsv(file.path(TAXONOMY_DIR, "tp-mapping-filtered.summary.tsv.gz")) |>
         filter(breadth >= 0.01) |>
@@ -116,7 +101,6 @@ process_taxonomic_data <- function(control_samples, tax_info) {
 }
 
 #' Process and save control taxa data
-#' @param tax_data Processed taxonomic data
 process_control_taxa <- function(tax_data) {
     control_taxa_nreads <- tax_data |>
         select(domain:species, reference, n_reads) |>
@@ -142,8 +126,6 @@ process_control_taxa <- function(tax_data) {
 }
 
 #' Create damage plot
-#' @param control_samples Control samples data.frame
-#' @param tax_data Taxonomic data
 plot_damage <- function(control_samples, tax_data) {
     read_csv(file.path(TAXONOMY_DIR, "tp-mdmg.weight-1.csv.gz")) |>
         inner_join(control_samples |> select(label, label_orig)) |>

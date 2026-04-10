@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(lvplot)
 library(showtext)
@@ -19,7 +18,6 @@ showtext_auto()
 set.tempdir("/maps/projects/fernandezguerra/scratch/tmp")
 
 #' Load and process metadata and taxonomy files
-#' @return list containing required data frames
 load_initial_data <- function() {
     # Load metadata
     kapk_cdata <- read_tsv(
@@ -68,8 +66,6 @@ load_initial_data <- function() {
 }
 
 #' Create and save damage thresholds
-#' @param thresholds Threshold values
-#' @return None
 save_damage_thresholds <- function(thresholds) {
     tibble(
         domain = "d__Eukaryota",
@@ -83,11 +79,6 @@ save_damage_thresholds <- function(thresholds) {
 }
 
 #' Analyze Eukaryotic damage distribution
-#' @param dmg_local Damage data
-#' @param tax_data Taxonomy data
-#' @param tax_info Taxonomy information
-#' @param signf Significance threshold
-#' @return list containing threshold values
 analyze_euk_damage <- function(dmg_local, tax_data, tax_info, signf) {
     dmg_local_euk <- dmg_local |>
         filter(significance >= signf) |>
@@ -134,11 +125,6 @@ analyze_euk_damage <- function(dmg_local, tax_data, tax_info, signf) {
 }
 
 #' Plot read number distribution
-#' @param dmg_local Processed damage data
-#' @param tax_info Taxonomy information
-#' @param tax_data Taxonomy data
-#' @param thresholds Threshold values
-#' @return ggplot object
 plot_reads_distribution <- function(dmg_local, tax_info, tax_data, thresholds) {
     dmg_local |>
         filter(significance >= thresholds$signf) |>
@@ -173,11 +159,6 @@ plot_reads_distribution <- function(dmg_local, tax_info, tax_data, thresholds) {
 }
 
 #' Plot damage distribution
-#' @param dmg_local Processed damage data
-#' @param tax_info Taxonomy information
-#' @param tax_data Taxonomy data
-#' @param thresholds Threshold values
-#' @return ggplot object
 plot_damage_distribution <- function(dmg_local, tax_info, tax_data, thresholds) {
     dmg_local |>
         select(label, tax_id, damage, significance) |>
@@ -214,10 +195,6 @@ plot_damage_distribution <- function(dmg_local, tax_info, tax_data, thresholds) 
 }
 
 #' Process and filter damage data
-#' @param dmg_local Raw damage data
-#' @param tax_data Taxonomy data
-#' @param thresholds Threshold values
-#' @return Filtered damage data
 process_damage_data <- function(dmg_local, tax_data, thresholds) {
     dmg_local |>
         mutate(reference = tax_id) |>
@@ -234,9 +211,6 @@ process_damage_data <- function(dmg_local, tax_data, thresholds) {
 }
 
 #' Plot reference counts by damage status
-#' @param dmg_data Processed damage data
-#' @param tax_info Taxonomy information
-#' @return ggplot object
 plot_reference_counts <- function(dmg_data, tax_info) {
     dmg_data |>
         inner_join(tax_info) |>
@@ -267,9 +241,6 @@ plot_reference_counts <- function(dmg_data, tax_info) {
 }
 
 #' Calculate taxonomic proportions
-#' @param dmg_data Processed damage data
-#' @param tax_info Taxonomy information
-#' @return data frame with calculated proportions
 calculate_taxonomic_proportions <- function(dmg_data, tax_info) {
     dmg_data |>
         inner_join(tax_info) |>
@@ -300,8 +271,6 @@ calculate_taxonomic_proportions <- function(dmg_data, tax_info) {
 }
 
 #' Plot taxonomic proportions
-#' @param tax_props Calculated taxonomic proportions
-#' @return ggplot object
 plot_taxonomic_proportions <- function(tax_props) {
     tax_props |>
         # Ensure domain is present and grouped correctly
@@ -331,12 +300,6 @@ plot_taxonomic_proportions <- function(tax_props) {
 }
 
 #' Process and save species-level aggregations
-#' @param tax_data_filt Filtered taxonomy data
-#' @param dmg_local_filt Filtered damage data
-#' @param tax_info Taxonomy information
-#' @param kapk_cdata Sample metadata
-#' @param thresholds Threshold values
-#' @return None
 process_species_level <- function(tax_data_filt, dmg_local_filt, tax_info,
                                   kapk_cdata, thresholds) {
     # Aggregate taxonomy data at species level
@@ -392,11 +355,6 @@ process_species_level <- function(tax_data_filt, dmg_local_filt, tax_info,
 }
 
 #' Filter and save results based on damage proportions
-#' @param tax_data Taxonomy data
-#' @param dmg_local Damage data
-#' @param tax_proportions Calculated taxonomic proportions
-#' @param kapk_cdata Sample metadata
-#' @return Filtered data list
 save_filtered_results <- function(tax_data, dmg_local, tax_proportions, kapk_cdata) {
     # Identify samples to keep
     samples_to_keep <- tax_proportions |>
@@ -437,7 +395,6 @@ save_filtered_results <- function(tax_data, dmg_local, tax_proportions, kapk_cda
 }
 
 #' Main execution function
-#' @return list containing plots and processed data
 main <- function() {
     # Load initial data
     data <- load_initial_data()

@@ -11,3 +11,43 @@ analysis/data/*
 analysis/results/*
 ~$*.*
 *.Rproj
+
+# Exploratory/internal scripts — not part of the public analysis
+analysis/scripts/assembly-overview.R
+analysis/scripts/code-dump.R
+analysis/scripts/taxonomic-overview.R
+analysis/scripts/smags-profiling.R
+analysis/scripts/run_agp_damage_array.slurm.sh
+analysis/scripts/run_agp_damage_pipeline.sh
+
+# Data directories — distributed via ERDA, not GitHub
+analysis/manuscript/
+
+# Output figures and internal documents
+Figure-*.png
+analysis/Figure-*.pdf
+*.docx
+
+# Supplementary tables — distributed separately, not on GitHub
+supp-tab/
+supp-tab-v2/
+
+# Distribution archives — built by analysis/.scripts/build-archives.sh
+analysis/data.tar.gz
+analysis/results.tar.gz
+
+# C++ tools — not required for R analysis scripts
+tools/
+
+# Personal/transient helper scripts (root level only)
+/.scripts/
+
+# Extra scripts also tracked at top level (live in extra/ only)
+analysis/scripts/benchmark-saturation.R
+analysis/scripts/bowtie2-benchmarks.R
+analysis/scripts/lib-sims.R
+analysis/scripts/simulations.R
+analysis/scripts/sourcetracker-sources-curation.R
+
+# Empty artefact directories
+results/

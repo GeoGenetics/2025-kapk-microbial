@@ -1,4 +1,3 @@
-# Required libraries
 library(tidyverse)
 library(biomformat)
 library(phyloseq)
@@ -10,7 +9,6 @@ showtext_auto()
 source("./libs/lib.R")
 
 #' Load and process taxonomic data
-#' @return list containing taxonomy data
 load_taxonomy_data <- function() {
     # Get taxonomic data
     tax_info <- read_tsv("./data/taxonomy/hires-organelles-viruses-arctic.tax.tsv",
@@ -37,8 +35,6 @@ load_taxonomy_data <- function() {
 }
 
 #' Load and process source data
-#' @param tax_info Taxonomy information
-#' @return list containing source data
 load_source_data <- function(tax_info) {
     # Load source metadata
     source_cdata <- read_tsv("./data/sourcetracker/cdata/kapk-biomes-download.txt",
@@ -85,7 +81,6 @@ load_source_data <- function(tax_info) {
 }
 
 #' Load and process sink data
-#' @return list containing sink data
 load_sink_data <- function() {
     # Read sink data
     sink_data <- readRDS("./results/taxonomy/kapk_ps_ba_gm.rds")
@@ -115,12 +110,6 @@ load_sink_data <- function() {
 }
 
 #' Create phyloseq object from source and sink data
-#' @param source_data_sp Source species data
-#' @param sink_data_sp Sink species data
-#' @param tax_info Taxonomy information
-#' @param source_cdata_short Source metadata
-#' @param sink_cdata Sink metadata
-#' @return phyloseq object
 create_phyloseq_object <- function(source_data_sp, sink_data_sp, tax_info, source_cdata_short, sink_cdata) {
     # Create OTU table
     st_df <- bind_rows(source_data_sp, sink_data_sp) |>
@@ -154,8 +143,6 @@ create_phyloseq_object <- function(source_data_sp, sink_data_sp, tax_info, sourc
 }
 
 #' Filter and export phyloseq object for SourceTracker
-#' @param st_ps Phyloseq object
-#' @return filtered phyloseq object and exported files
 process_sourcetracker_data <- function(st_ps) {
     # Filter phyloseq object
     st_ps_filt <- get_st(st_ps, nsites = 0.01, vcoeff = 3)
@@ -199,7 +186,6 @@ process_sourcetracker_data <- function(st_ps) {
 }
 
 #' Load and process SourceTracker results
-#' @return list containing processed results
 load_sourcetracker_results <- function() {
     # Read results
     st_results <- read_tsv("./results/sourcetracker/mixing_proportions.txt",
@@ -236,7 +222,6 @@ load_sourcetracker_results <- function() {
 }
 
 #' Process feature contributions
-#' @return processed feature contributions
 process_feature_contributions <- function() {
     cont_files <- list.files(
         "./results/sourcetracker",
@@ -256,9 +241,6 @@ process_feature_contributions <- function() {
 }
 
 #' Process contribution data
-#' @param contribution_data Feature contribution data
-#' @param tax_info Taxonomy information
-#' @return top contributions by genus
 get_top_contributions <- function(contribution_data, tax_info) {
     contribution_data |>
         select(-label) |>
@@ -271,8 +253,6 @@ get_top_contributions <- function(contribution_data, tax_info) {
 }
 
 #' Plot source biome data
-#' @param source_biome_data Source biome data
-#' @return ggplot object
 plot_source_biomes <- function(source_biome_data) {
     source_biome_data |>
         select(label, biome_subclass) |>
@@ -294,10 +274,6 @@ plot_source_biomes <- function(source_biome_data) {
 }
 
 #' Plot biome classification results
-#' @param st_results_long Long format SourceTracker results
-#' @param st_result_sd_long Long format SourceTracker standard deviations
-#' @param sink_data Sink data
-#' @return ggplot object
 plot_biome_classification <- function(st_results_long, st_result_sd_long, sink_data) {
     # Get top biomes
     top_biomes <- st_results_long |>
@@ -357,11 +333,6 @@ plot_biome_classification <- function(st_results_long, st_result_sd_long, sink_d
 }
 
 #' Plot decOM results
-#' @param decom_results DecOM results
-#' @param label_to_file Label to file mapping
-#' @param kapk_cdata Sample metadata
-#' @param st_results SourceTracker results
-#' @return processed decOM results
 process_decom_results <- function(decom_results, label_to_file, kapk_cdata, st_results) {
     decom_results |>
         select(file = Sink, starts_with("p_")) |>
@@ -377,8 +348,6 @@ process_decom_results <- function(decom_results, label_to_file, kapk_cdata, st_r
 }
 
 #' Plot biome distributions by class and subclass
-#' @param source_biome_data Source biome data
-#' @return list of plots
 plot_biome_distributions <- function(source_biome_data) {
     # Biome class plot
     biome_class_plot <- source_biome_data |>
@@ -433,7 +402,6 @@ plot_biome_distributions <- function(source_biome_data) {
 }
 
 #' Main execution function
-#' @return list containing results and all plots
 main <- function() {
     # Load initial data
     tax_info <- load_taxonomy_data()
